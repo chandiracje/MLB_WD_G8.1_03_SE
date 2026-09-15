@@ -24,11 +24,13 @@ public class Category {
     private Category parent;
 
     // Convenience getter so JSON serialization includes parentId directly
+    @Transient
     public Long getParentId() {
         return parent != null ? parent.getId() : null;
     }
 
     // Convenience getter so JSON serialization includes parentName
+    @Transient
     public String getParentName() {
         return parent != null ? parent.getName() : null;
     }
