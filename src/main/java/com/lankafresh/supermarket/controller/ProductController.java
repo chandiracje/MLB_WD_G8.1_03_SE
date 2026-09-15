@@ -1,5 +1,6 @@
 package com.lankafresh.supermarket.controller;
 
+import com.lankafresh.supermarket.dto.CategoryRequest;
 import com.lankafresh.supermarket.dto.StockAdjustmentRequest;
 import com.lankafresh.supermarket.entity.*;
 import com.lankafresh.supermarket.service.ProductService;
@@ -94,15 +95,42 @@ public class ProductController {
         return ResponseEntity.ok(productService.getAdjustmentHistory(productId));
     }
 
+    // ─── Category CRUD Endpoints ─────────────────────────────────────────────────
+
     @GetMapping("/categories")
     public ResponseEntity<List<Category>> getCategories() {
         return ResponseEntity.ok(productService.getAllCategories());
     }
 
     @PostMapping("/categories")
-    public ResponseEntity<Category> createCategory(@RequestBody Category category) {
-        return ResponseEntity.ok(productService.createCategory(category));
+    public ResponseEntity<?> createCategory(@RequestBody CategoryRequest request) {
+        try {
+            return ResponseEntity.ok(productService.createCategory(request));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
+
+    @PutMapping("/categories/{id}")
+    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody CategoryRequest request) {
+        try {
+            return ResponseEntity.ok(productService.updateCategory(id, request));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/categories/{id}")
+    public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
+        try {
+            productService.deleteCategory(id);
+            return ResponseEntity.ok(Map.of("message", "Category deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // ─── Promotions ──────────────────────────────────────────────────────────────
 
     @GetMapping("/promotions")
     public ResponseEntity<List<Promotion>> getPromotions() {

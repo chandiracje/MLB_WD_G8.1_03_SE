@@ -8,19 +8,30 @@ export const ManagerDashboard = () => {
   const [stats, setStats] = useState({ totalRevenue: 0, totalOrders: 0, totalProducts: 0, lowStockCount: 0 });
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'products', 'orders', 'staff'
+  const [categories, setCategories] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'orders', 'staff'
+
+  // Product modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-
-  // Form state
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formUnit, setFormUnit] = useState('unit');
   const [formStock, setFormStock] = useState('20');
   const [formReorder, setFormReorder] = useState('10');
-  const [formCategory, setFormCategory] = useState('1');
+  const [formMainCategory, setFormMainCategory] = useState('');
+  const [formSubCategory, setFormSubCategory] = useState('');
   const [formImg, setFormImg] = useState('');
+  const [productFormError, setProductFormError] = useState('');
+
+  // Category modal state
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [catFormName, setCatFormName] = useState('');
+  const [catFormParent, setCatFormParent] = useState('');
+  const [catFormError, setCatFormError] = useState('');
+  const [catActionMsg, setCatActionMsg] = useState('');
 
   useEffect(() => {
     loadData();
@@ -31,85 +42,128 @@ export const ManagerDashboard = () => {
       const s = await api.getDashboardStats();
       if (s) setStats(s);
     } catch (e) {
-      console.warn("Could not fetch stats:", e.message);
+      console.warn('Could not fetch stats:', e.message);
     }
-
     try {
       const p = await api.getProducts();
       setProducts(p || []);
     } catch (e) {
-      console.warn("Could not fetch products:", e.message);
+      console.warn('Could not fetch products:', e.message);
     }
-
     try {
       const o = await api.getAllOrders();
       setOrders(o || []);
     } catch (e) {
-      console.warn("Could not fetch orders:", e.message);
+      console.warn('Could not fetch orders:', e.message);
+    }
+    try {
+      const c = await api.getCategories();
+      setCategories(c || []);
+    } catch (e) {
+      console.warn('Could not fetch categories:', e.message);
     }
   };
 
-  const [productFormError, setProductFormError] = useState('');
+  // Derived data helpers
+  const mainCategories = categories.filter(c => !c.parentId);
+  const subCategoriesOf = (parentId) => categories.filter(c => c.parentId === parentId);
+  const effectiveCategoryId = () => {
+    if (formSubCategory) return formSubCategory;
+    if (formMainCategory) return formMainCategory;
+    return null;
+  };
+
+  // ─── Product handlers ───────────────────────────────────────────────────────
+
+  const openAddProduct = () => {
+    setEditingProduct(null);
+    setFormName(''); setFormDesc(''); setFormPrice('');
+    setFormUnit('unit'); setFormStock('20'); setFormReorder('10');
+    setFormMainCategory(''); setFormSubCategory(''); setFormImg('');
+    setProductFormError('');
+    setIsAddModalOpen(true);
+  };
+
+  const openEditProduct = (p) => {
+    setEditingProduct(p);
+    setFormName(p.name);
+    setFormDesc(p.description || '');
+    setFormPrice(p.price.toString());
+    setFormStock(p.stockQuantity != null ? p.stockQuantity.toString() : '0');
+    setFormReorder(p.reorderLevel != null ? p.reorderLevel.toString() : '10');
+    setFormUnit(p.unit || 'unit');
+    setFormImg(p.imageUrl || '');
+    setProductFormError('');
+
+    // Resolve main / sub category from product
+    const cat = p.category;
+    if (cat) {
+      if (cat.parentId) {
+        setFormMainCategory(String(cat.parentId));
+        setFormSubCategory(String(cat.id));
+      } else {
+        setFormMainCategory(String(cat.id));
+        setFormSubCategory('');
+      }
+    } else {
+      setFormMainCategory(''); setFormSubCategory('');
+    }
+    setIsAddModalOpen(true);
+  };
 
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     setProductFormError('');
-
     if (!formName.trim() || formName.trim().length < 3) {
-      setProductFormError('Product name must be at least 3 characters.');
-      return;
+      setProductFormError('Product name must be at least 3 characters.'); return;
     }
-
     const price = parseFloat(formPrice);
     if (isNaN(price) || price <= 0) {
-      setProductFormError('Price must be a valid positive amount greater than 0.');
-      return;
+      setProductFormError('Price must be a valid positive amount greater than 0.'); return;
     }
-
     const stock = parseInt(formStock, 10);
     if (isNaN(stock) || stock < 0) {
-      setProductFormError('Stock quantity cannot be negative.');
-      return;
+      setProductFormError('Stock quantity cannot be negative.'); return;
     }
-
     const reorder = parseInt(formReorder, 10);
     if (isNaN(reorder) || reorder < 1) {
-      setProductFormError('Reorder threshold level must be at least 1.');
-      return;
+      setProductFormError('Reorder threshold level must be at least 1.'); return;
     }
 
     const productPayload = {
       name: formName.trim(),
       description: formDesc.trim(),
-      price: price,
+      price,
       unit: formUnit.trim() || 'unit',
       stockQuantity: stock,
       reorderLevel: reorder,
-      imageUrl: formImg.trim() || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=500&q=80"
+      imageUrl: formImg.trim() || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=500&q=80'
     };
+
+    const catId = effectiveCategoryId();
 
     try {
       if (editingProduct) {
-        await api.updateProduct(editingProduct.id, productPayload, formCategory);
+        await api.updateProduct(editingProduct.id, productPayload, catId);
       } else {
-        await api.createProduct(productPayload, formCategory);
+        await api.createProduct(productPayload, catId);
       }
       loadData();
       setIsAddModalOpen(false);
       setEditingProduct(null);
       setProductFormError('');
     } catch (err) {
-      setProductFormError(err.message || "Save product failed.");
+      setProductFormError(err.message || 'Save product failed.');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to discontinue this product?")) {
+  const handleDeleteProduct = async (id) => {
+    if (window.confirm('Are you sure you want to discontinue this product?')) {
       try {
         await api.deleteProduct(id);
         loadData();
       } catch (e) {
-        console.error("Delete product failed:", e);
+        console.error('Delete product failed:', e);
       }
     }
   };
@@ -119,9 +173,88 @@ export const ManagerDashboard = () => {
       await api.updateOrderStatus(orderId, newStatus);
       loadData();
     } catch (e) {
-      console.error("Update order status failed:", e);
+      console.error('Update order status failed:', e);
     }
   };
+
+  // ─── Category handlers ──────────────────────────────────────────────────────
+
+  const openAddCategory = () => {
+    setEditingCategory(null);
+    setCatFormName(''); setCatFormParent(''); setCatFormError('');
+    setIsCatModalOpen(true);
+  };
+
+  const openEditCategory = (cat) => {
+    setEditingCategory(cat);
+    setCatFormName(cat.name);
+    setCatFormParent(cat.parentId ? String(cat.parentId) : '');
+    setCatFormError('');
+    setIsCatModalOpen(true);
+  };
+
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    setCatFormError('');
+    if (!catFormName.trim()) { setCatFormError('Category name is required.'); return; }
+    try {
+      const payload = {
+        name: catFormName.trim(),
+        parentId: catFormParent ? Number(catFormParent) : null
+      };
+      if (editingCategory) {
+        await api.updateCategory(editingCategory.id, payload);
+      } else {
+        await api.createCategory(payload);
+      }
+      await loadData();
+      setIsCatModalOpen(false);
+      setCatActionMsg(editingCategory ? 'Category updated!' : 'Category created!');
+      setTimeout(() => setCatActionMsg(''), 3000);
+    } catch (err) {
+      setCatFormError(err.message || 'Failed to save category.');
+    }
+  };
+
+  const handleDeleteCategory = async (cat) => {
+    const subCount = subCategoriesOf(cat.id).length;
+    const productCount = products.filter(p => p.category?.id === cat.id).length;
+
+    if (subCount > 0) {
+      alert(`Cannot delete "${cat.name}" — it has ${subCount} sub-category(s). Delete them first.`);
+      return;
+    }
+    if (productCount > 0) {
+      alert(`Cannot delete "${cat.name}" — ${productCount} product(s) are assigned to it. Reassign them first.`);
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?`)) return;
+    try {
+      await api.deleteCategory(cat.id);
+      await loadData();
+      setCatActionMsg(`Category "${cat.name}" deleted.`);
+      setTimeout(() => setCatActionMsg(''), 3000);
+    } catch (err) {
+      alert(err.message || 'Failed to delete category.');
+    }
+  };
+
+  // ─── Tab style helper ───────────────────────────────────────────────────────
+  const tabBtn = (key, label) => (
+    <button
+      onClick={() => setActiveTab(key)}
+      style={{
+        padding: '8px 18px',
+        borderRadius: 'var(--radius-md)',
+        fontWeight: '600',
+        background: activeTab === key ? 'var(--primary)' : 'var(--bg-card)',
+        color: activeTab === key ? 'white' : 'var(--text-main)',
+        border: '1px solid var(--border)'
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 20px' }}>
@@ -129,23 +262,18 @@ export const ManagerDashboard = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', color: 'var(--text-main)' }}>Store Manager Command Center</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Full administrative oversight of products, inventory, orders and permissions</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Full administrative oversight of products, categories, inventory, orders and permissions</p>
         </div>
-
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button 
-            onClick={() => {
-              setEditingProduct(null);
-              setFormName('');
-              setFormDesc('');
-              setFormPrice('');
-              setFormStock('20');
-              setFormImg('');
-              setIsAddModalOpen(true);
-            }}
-            className="btn-primary"
-          >
+          <button onClick={openAddProduct} className="btn-primary">
             <IconPlus size={18} /> Add New Product
+          </button>
+          <button
+            onClick={openAddCategory}
+            className="btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', fontWeight: '600' }}
+          >
+            <IconPlus size={16} /> Add Category
           </button>
         </div>
       </div>
@@ -155,110 +283,51 @@ export const ManagerDashboard = () => {
         <div className="glass-card" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>TOTAL SALES REVENUE</span>
-            <div style={{ background: '#dcfce7', color: '#16a34a', padding: '6px', borderRadius: '8px' }}>
-              <IconDollar size={18} />
-            </div>
+            <div style={{ background: '#dcfce7', color: '#16a34a', padding: '6px', borderRadius: '8px' }}><IconDollar size={18} /></div>
           </div>
-          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>
-            Rs. {Number(stats.totalRevenue).toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px', fontWeight: '600' }}>
-            ↑ +14.2% this week
-          </div>
+          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>Rs. {Number(stats.totalRevenue).toLocaleString()}</div>
+          <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px', fontWeight: '600' }}>↑ +14.2% this week</div>
         </div>
 
         <div className="glass-card" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>TOTAL ORDERS PLACED</span>
-            <div style={{ background: '#e0f2fe', color: '#0284c7', padding: '6px', borderRadius: '8px' }}>
-              <IconPackage size={18} />
-            </div>
+            <div style={{ background: '#e0f2fe', color: '#0284c7', padding: '6px', borderRadius: '8px' }}><IconPackage size={18} /></div>
           </div>
-          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>
-            {orders.length || stats.totalOrders}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#0284c7', marginTop: '4px', fontWeight: '600' }}>
-            Active supermarket orders
-          </div>
+          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>{orders.length || stats.totalOrders}</div>
+          <div style={{ fontSize: '0.75rem', color: '#0284c7', marginTop: '4px', fontWeight: '600' }}>Active supermarket orders</div>
         </div>
 
         <div className="glass-card" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>ACTIVE CATALOG ITEMS</span>
-            <div style={{ background: '#fef3c7', color: '#b45309', padding: '6px', borderRadius: '8px' }}>
-              <IconBarChart size={18} />
-            </div>
+            <div style={{ background: '#fef3c7', color: '#b45309', padding: '6px', borderRadius: '8px' }}><IconBarChart size={18} /></div>
           </div>
-          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>
-            {products.length}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '4px', fontWeight: '600' }}>
-            Across 6 categories
-          </div>
+          <div style={{ fontSize: '1.7rem', fontWeight: '800', color: 'var(--text-main)' }}>{products.length}</div>
+          <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '4px', fontWeight: '600' }}>Across {mainCategories.length} categories</div>
         </div>
 
         <div className="glass-card" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>LOW STOCK ALERTS</span>
-            <div style={{ background: '#fee2e2', color: '#dc2626', padding: '6px', borderRadius: '8px' }}>
-              <IconAlert size={18} />
-            </div>
+            <div style={{ background: '#fee2e2', color: '#dc2626', padding: '6px', borderRadius: '8px' }}><IconAlert size={18} /></div>
           </div>
           <div style={{ fontSize: '1.7rem', fontWeight: '800', color: '#dc2626' }}>
             {products.filter(p => p.stockQuantity <= (p.reorderLevel || 10)).length}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px', fontWeight: '600' }}>
-            Items need replenishment
-          </div>
+          <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px', fontWeight: '600' }}>Items need replenishment</div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '20px' }}>
-        <button
-          onClick={() => setActiveTab('overview')}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: '600',
-            background: activeTab === 'overview' ? 'var(--primary)' : 'var(--bg-card)',
-            color: activeTab === 'overview' ? 'white' : 'var(--text-main)',
-            border: '1px solid var(--border)'
-          }}
-        >
-          Product Catalog ({products.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('orders')}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: '600',
-            background: activeTab === 'orders' ? 'var(--primary)' : 'var(--bg-card)',
-            color: activeTab === 'orders' ? 'white' : 'var(--text-main)',
-            border: '1px solid var(--border)'
-          }}
-        >
-          Customer Orders ({orders.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('staff')}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: '600',
-            background: activeTab === 'staff' ? 'var(--primary)' : 'var(--bg-card)',
-            color: activeTab === 'staff' ? 'white' : 'var(--text-main)',
-            border: '1px solid var(--border)'
-          }}
-        >
-          Staff & Access Controls
-        </button>
+      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {tabBtn('overview', `Product Catalog (${products.length})`)}
+        {tabBtn('categories', `Categories (${categories.length})`)}
+        {tabBtn('orders', `Customer Orders (${orders.length})`)}
+        {tabBtn('staff', 'Staff & Access Controls')}
       </div>
 
-      {/* Tab 1: Product Catalog Table */}
+      {/* Tab: Product Catalog */}
       {activeTab === 'overview' && (
         <div className="glass-card" style={{ overflowX: 'auto', padding: '16px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
@@ -267,7 +336,7 @@ export const ManagerDashboard = () => {
                 <th style={{ padding: '10px' }}>Product</th>
                 <th style={{ padding: '10px' }}>Category</th>
                 <th style={{ padding: '10px' }}>Price</th>
-                <th style={{ padding: '10px' }}>Stock Quantity</th>
+                <th style={{ padding: '10px' }}>Stock</th>
                 <th style={{ padding: '10px' }}>Status</th>
                 <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
               </tr>
@@ -279,7 +348,11 @@ export const ManagerDashboard = () => {
                     <img src={p.imageUrl} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
                     <strong>{p.name}</strong>
                   </td>
-                  <td style={{ padding: '10px' }}>{p.category?.name || p.categoryName || 'General'}</td>
+                  <td style={{ padding: '10px' }}>
+                    {p.category?.parentName
+                      ? <span>{p.category.parentName} <span style={{ color: 'var(--text-muted)' }}>›</span> {p.category.name}</span>
+                      : (p.category?.name || p.categoryName || '—')}
+                  </td>
                   <td style={{ padding: '10px', fontWeight: '700' }}>Rs. {Number(p.price).toFixed(2)}</td>
                   <td style={{ padding: '10px' }}>
                     <span style={{ fontWeight: '700', color: p.stockQuantity <= (p.reorderLevel || 10) ? '#dc2626' : 'var(--text-main)' }}>
@@ -292,27 +365,8 @@ export const ManagerDashboard = () => {
                     </span>
                   </td>
                   <td style={{ padding: '10px', textAlign: 'right' }}>
-                    <button 
-                      onClick={() => {
-                        setEditingProduct(p);
-                        setFormName(p.name);
-                        setFormDesc(p.description || '');
-                        setFormPrice(p.price.toString());
-                        setFormStock(p.stockQuantity.toString());
-                        setFormUnit(p.unit || 'unit');
-                        setFormImg(p.imageUrl || '');
-                        setIsAddModalOpen(true);
-                      }}
-                      className="btn-secondary" 
-                      style={{ padding: '4px 10px', fontSize: '0.8rem', marginRight: '6px' }}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(p.id)}
-                      style={{ color: '#ef4444', padding: '4px 8px' }}
-                      title="Discontinue"
-                    >
+                    <button onClick={() => openEditProduct(p)} className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.8rem', marginRight: '6px' }}>Edit</button>
+                    <button onClick={() => handleDeleteProduct(p.id)} style={{ color: '#ef4444', padding: '4px 8px' }} title="Discontinue">
                       <IconTrash size={16} />
                     </button>
                   </td>
@@ -323,7 +377,96 @@ export const ManagerDashboard = () => {
         </div>
       )}
 
-      {/* Tab 2: Orders Table */}
+      {/* Tab: Categories Management */}
+      {activeTab === 'categories' && (
+        <div>
+          {catActionMsg && (
+            <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 16px', borderRadius: '8px', marginBottom: '14px', fontWeight: '600', fontSize: '0.9rem' }}>
+              ✓ {catActionMsg}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            {mainCategories.map(cat => {
+              const subs = subCategoriesOf(cat.id);
+              return (
+                <div key={cat.id} className="glass-card" style={{ padding: '18px' }}>
+                  {/* Main Category Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div>
+                      <span style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>{cat.name}</span>
+                      <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#e0f2fe', color: '#0284c7', padding: '2px 8px', borderRadius: '999px', fontWeight: '600' }}>
+                        Main Category
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        onClick={() => openEditCategory(cat)}
+                        className="btn-secondary"
+                        style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat)}
+                        style={{ color: '#ef4444', padding: '3px 8px' }}
+                        title="Delete"
+                      >
+                        <IconTrash size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sub-categories */}
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--border)' }}>
+                    {subs.length === 0 ? (
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: '4px' }}>No sub-categories</div>
+                    ) : (
+                      subs.map(sub => (
+                        <div key={sub.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>
+                            <span style={{ marginRight: '6px', color: 'var(--text-muted)' }}>›</span>
+                            {sub.name}
+                          </div>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              onClick={() => openEditCategory(sub)}
+                              className="btn-secondary"
+                              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(sub)}
+                              style={{ color: '#ef4444', padding: '2px 6px' }}
+                            >
+                              <IconTrash size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {/* Add Sub-category quick link */}
+                    <button
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setCatFormName('');
+                        setCatFormParent(String(cat.id));
+                        setCatFormError('');
+                        setIsCatModalOpen(true);
+                      }}
+                      style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer', padding: '0' }}
+                    >
+                      + Add Sub-category
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Orders */}
       {activeTab === 'orders' && (
         <div className="glass-card" style={{ overflowX: 'auto', padding: '16px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
@@ -349,18 +492,10 @@ export const ManagerDashboard = () => {
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{o.deliveryAddress}</div>
                   </td>
                   <td style={{ padding: '10px', fontSize: '0.85rem' }}>{o.deliverySlot}</td>
-                  <td style={{ padding: '10px', fontWeight: '700', color: 'var(--primary)' }}>
-                    Rs. {Number(o.totalAmount).toFixed(2)}
-                  </td>
-                  <td style={{ padding: '10px' }}>
-                    <span className="badge badge-success">{o.status}</span>
-                  </td>
+                  <td style={{ padding: '10px', fontWeight: '700', color: 'var(--primary)' }}>Rs. {Number(o.totalAmount).toFixed(2)}</td>
+                  <td style={{ padding: '10px' }}><span className="badge badge-success">{o.status}</span></td>
                   <td style={{ padding: '10px', textAlign: 'right' }}>
-                    <select
-                      value={o.status}
-                      onChange={(e) => handleStatusChange(o.id, e.target.value)}
-                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                    >
+                    <select value={o.status} onChange={(e) => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="PLACED">PLACED</option>
                       <option value="CONFIRMED">CONFIRMED</option>
                       <option value="PACKED">PACKED</option>
@@ -377,7 +512,7 @@ export const ManagerDashboard = () => {
         </div>
       )}
 
-      {/* Tab 3: Staff & Access Controls */}
+      {/* Tab: Staff */}
       {activeTab === 'staff' && (
         <div className="glass-card" style={{ padding: '20px' }}>
           <h3 style={{ marginBottom: '14px' }}>System Staff Accounts & Role Matrix</h3>
@@ -397,7 +532,7 @@ export const ManagerDashboard = () => {
         </div>
       )}
 
-      {/* Add / Edit Product Modal */}
+      {/* ─── Add / Edit Product Modal ─────────────────────────────────────────── */}
       {isAddModalOpen && (
         <div className="modal-overlay" onClick={() => setIsAddModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -412,6 +547,7 @@ export const ManagerDashboard = () => {
                   {productFormError}
                 </div>
               )}
+
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>Product Name *</label>
                 <input required value={formName} onChange={(e) => setFormName(e.target.value)} style={{ width: '100%' }} />
@@ -420,6 +556,40 @@ export const ManagerDashboard = () => {
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>Description</label>
                 <textarea rows={2} value={formDesc} onChange={(e) => setFormDesc(e.target.value)} style={{ width: '100%' }} />
+              </div>
+
+              {/* Category Selection */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>Main Category</label>
+                  <select
+                    value={formMainCategory}
+                    onChange={(e) => { setFormMainCategory(e.target.value); setFormSubCategory(''); }}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-main)' }}
+                  >
+                    <option value="">— Select Category —</option>
+                    {mainCategories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                    Sub-Category
+                    <span style={{ fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>(optional)</span>
+                  </label>
+                  <select
+                    value={formSubCategory}
+                    onChange={(e) => setFormSubCategory(e.target.value)}
+                    disabled={!formMainCategory || subCategoriesOf(Number(formMainCategory)).length === 0}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-main)', opacity: (!formMainCategory || subCategoriesOf(Number(formMainCategory)).length === 0) ? 0.5 : 1 }}
+                  >
+                    <option value="">— None —</option>
+                    {formMainCategory && subCategoriesOf(Number(formMainCategory)).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -450,8 +620,68 @@ export const ManagerDashboard = () => {
               </div>
 
               <button type="submit" className="btn-primary" style={{ justifyContent: 'center', padding: '12px', marginTop: '10px' }}>
-                Save Product
+                {editingProduct ? 'Update Product' : 'Save Product'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add / Edit Category Modal ────────────────────────────────────────── */}
+      {isCatModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsCatModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.2rem' }}>{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
+              <button onClick={() => setIsCatModalOpen(false)}><IconX size={20} /></button>
+            </div>
+
+            <form onSubmit={handleSaveCategory} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {catFormError && (
+                <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #fca5a5' }}>
+                  {catFormError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Category Name *</label>
+                <input
+                  required
+                  value={catFormName}
+                  onChange={(e) => setCatFormName(e.target.value)}
+                  placeholder="e.g. Organic Fruits"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                  Parent Category
+                  <span style={{ fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>(leave empty for main category)</span>
+                </label>
+                <select
+                  value={catFormParent}
+                  onChange={(e) => setCatFormParent(e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-main)' }}
+                >
+                  <option value="">— None (Main Category) —</option>
+                  {mainCategories
+                    .filter(c => !editingCategory || c.id !== editingCategory.id)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '11px' }}>
+                  {editingCategory ? 'Update Category' : 'Create Category'}
+                </button>
+                <button type="button" onClick={() => setIsCatModalOpen(false)} className="btn-secondary" style={{ padding: '11px 18px' }}>
+                  Cancel
+                </button>
+              </div>
             </form>
           </div>
         </div>

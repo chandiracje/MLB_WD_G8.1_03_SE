@@ -11,6 +11,7 @@ import java.util.List;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByIsDiscontinuedFalse();
     List<Product> findByCategoryIdAndIsDiscontinuedFalse(Long categoryId);
+    long countByCategoryId(Long categoryId);
 
     @Query("SELECT p FROM Product p WHERE p.isDiscontinued = false AND " +
            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +

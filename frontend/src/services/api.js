@@ -100,6 +100,25 @@ export const api = {
   },
 
   getCategories: async () => request('/categories'),
+
+  createCategory: async ({ name, parentId }) => {
+    return request('/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, parentId: parentId || null })
+    });
+  },
+
+  updateCategory: async (id, { name, parentId }) => {
+    return request(`/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, parentId: parentId || null })
+    });
+  },
+
+  deleteCategory: async (id) => {
+    return request(`/categories/${id}`, { method: 'DELETE' });
+  },
+
   getPromotions: async () => request('/promotions'),
 
   // Inventory

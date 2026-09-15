@@ -1,5 +1,6 @@
 package com.lankafresh.supermarket.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,5 +20,16 @@ public class Category {
 
     @ManyToOne
     @JoinColumn(name = "parent_id")
+    @JsonIgnoreProperties("parent")
     private Category parent;
+
+    // Convenience getter so JSON serialization includes parentId directly
+    public Long getParentId() {
+        return parent != null ? parent.getId() : null;
+    }
+
+    // Convenience getter so JSON serialization includes parentName
+    public String getParentName() {
+        return parent != null ? parent.getName() : null;
+    }
 }
