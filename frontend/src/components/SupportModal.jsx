@@ -243,7 +243,22 @@ export const SupportModal = ({ isOpen, onClose }) => {
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
                     Category: <strong>{t.category}</strong> • Ticket #{t.id}
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{t.message}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: '0 0 8px 0' }}>{t.message}</p>
+                  {t.replies && t.replies.length > 0 && (
+                    <div style={{ marginTop: '8px', borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--primary)' }}>
+                        💬 Support Team Responses ({t.replies.length}):
+                      </span>
+                      {t.replies.map((rep, idx) => (
+                        <div key={rep.id || idx} style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '6px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '700', marginBottom: '2px' }}>
+                            🎧 {rep.senderName || 'Support Agent'}
+                          </div>
+                          <div>{rep.message}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             )}

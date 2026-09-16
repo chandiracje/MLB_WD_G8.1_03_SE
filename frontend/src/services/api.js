@@ -224,8 +224,18 @@ export const api = {
   },
   getUserTickets: async (userId) => request(`/support/user/${userId}`),
   getAllTickets: async () => request('/support'),
+  getTicketById: async (ticketId) => request(`/support/${ticketId}`),
   updateTicketStatus: async (ticketId, status) => {
     return request(`/support/${ticketId}/status?status=${status}`, { method: 'PUT' });
+  },
+  addTicketReply: async (ticketId, replyData) => {
+    return request(`/support/${ticketId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(replyData)
+    });
+  },
+  deleteTicket: async (ticketId) => {
+    return request(`/support/${ticketId}`, { method: 'DELETE' });
   },
 
   // Procurement

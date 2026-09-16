@@ -1,6 +1,7 @@
 package com.lankafresh.supermarket.controller;
 
 import com.lankafresh.supermarket.entity.SupportTicket;
+import com.lankafresh.supermarket.entity.TicketReply;
 import com.lankafresh.supermarket.entity.TicketStatus;
 import com.lankafresh.supermarket.service.SupportTicketService;
 import lombok.RequiredArgsConstructor;
@@ -38,11 +39,45 @@ public class SupportTicketController {
         return ResponseEntity.ok(supportTicketService.getAllTickets());
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getTicketById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(supportTicketService.getTicketById(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestParam TicketStatus status) {
         try {
             SupportTicket updated = supportTicketService.updateTicketStatus(id, status);
             return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/reply")
+    public ResponseEntity<?> addReply(@PathVariable Long id, @RequestBody TicketReply reply) {
+        try {
+            TicketReply savedReply = supportTicketService.addReply(id, reply);
+            return ResponseEntity.ok(savedReply);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/replies")
+    public ResponseEntity<List<TicketReply>> getReplies(@PathVariable Long id) {
+        return ResponseEntity.ok(supportTicketService.getRepliesByTicket(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteTicket(@PathVariable Long id) {
+        try {
+            supportTicketService.deleteTicket(id);
+            return ResponseEntity.ok(Map.of("message", "Support ticket deleted successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }

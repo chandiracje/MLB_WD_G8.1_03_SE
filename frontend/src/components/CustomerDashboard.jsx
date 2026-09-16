@@ -27,6 +27,30 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
   const [newTicketCategory, setNewTicketCategory] = useState('Delivery Issue');
   const [newTicketMessage, setNewTicketMessage] = useState('');
   const [submittingTicket, setSubmittingTicket] = useState(false);
+  const [customerReplies, setCustomerReplies] = useState({});
+  const [replyingTicketId, setReplyingTicketId] = useState(null);
+
+  const handleSendCustomerReply = async (ticketId) => {
+    const text = (customerReplies[ticketId] || '').trim();
+    if (!text) return;
+
+    setReplyingTicketId(ticketId);
+    try {
+      const payload = {
+        senderRole: 'CUSTOMER',
+        senderName: user?.name || 'Customer',
+        message: text
+      };
+      await api.addTicketReply(ticketId, payload);
+      setCustomerReplies(prev => ({ ...prev, [ticketId]: '' }));
+      await fetchTickets();
+      showToast("Reply sent to customer support!", "success");
+    } catch (e) {
+      showToast("Failed to send reply: " + e.message, "danger");
+    } finally {
+      setReplyingTicketId(null);
+    }
+  };
 
   // Profile Form State
   const [profileName, setProfileName] = useState(user?.name || '');
@@ -978,6 +1002,66 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
                     <p style={{ fontSize: '0.84rem', color: 'var(--text-main)', margin: 0, lineHeight: '1.4' }}>
                       {ticket.message}
                     </p>
+
+                    {/* Chat Replies Thread */}
+                    {ticket.replies && ticket.replies.length > 0 && (
+                      <div style={{ marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--primary)' }}>
+                          💬 Agent Conversation ({ticket.replies.length}):
+                        </div>
+                        {ticket.replies.map((rep, rIdx) => {
+                          const isSupport = rep.senderRole === 'SUPPORT';
+                          return (
+                            <div 
+                              key={rep.id || rIdx} 
+                              style={{ 
+                                background: isSupport ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)', 
+                                border: isSupport ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid var(--border)',
+                                padding: '8px 12px', 
+                                borderRadius: '8px',
+                                fontSize: '0.82rem'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                <strong style={{ color: isSupport ? '#059669' : 'var(--text-main)' }}>
+                                  {isSupport ? `🎧 ${rep.senderName || 'Support Agent'}` : 'You'}
+                                </strong>
+                                <span>{rep.createdAt ? new Date(rep.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                              </div>
+                              <div style={{ color: 'var(--text-main)', lineHeight: 1.4 }}>{rep.message}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Customer Reply Input */}
+                    {ticket.status !== 'CLOSED' && (
+                      <div style={{ marginTop: '10px', display: 'flex', gap: '6px' }}>
+                        <input
+                          type="text"
+                          placeholder="Reply back to support agent..."
+                          value={customerReplies[ticket.id] || ''}
+                          onChange={(e) => setCustomerReplies({ ...customerReplies, [ticket.id]: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSendCustomerReply(ticket.id);
+                            }
+                          }}
+                          style={{ flex: 1, padding: '6px 10px', fontSize: '0.82rem' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSendCustomerReply(ticket.id)}
+                          disabled={replyingTicketId === ticket.id || !(customerReplies[ticket.id] || '').trim()}
+                          className="btn-primary"
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', cursor: 'pointer' }}
+                        >
+                          {replyingTicketId === ticket.id ? 'Sending...' : 'Reply'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
