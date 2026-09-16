@@ -214,6 +214,22 @@ export const api = {
   updateDeliveryStatus: async (deliveryId, status, notes) => {
     return request(`/deliveries/${deliveryId}/status?status=${status}${notes ? `&notes=${encodeURIComponent(notes)}` : ''}`, { method: 'PUT' });
   },
+  deleteDelivery: async (deliveryId) => {
+    return request(`/deliveries/${deliveryId}`, { method: 'DELETE' });
+  },
+  updateDeliveryRoute: async (deliveryId, { routeName, stopOrder, vehicleNumber }) => {
+    const params = new URLSearchParams();
+    if (routeName) params.append('routeName', routeName);
+    if (stopOrder !== undefined && stopOrder !== null) params.append('stopOrder', stopOrder);
+    if (vehicleNumber) params.append('vehicleNumber', vehicleNumber);
+    return request(`/deliveries/${deliveryId}/route?${params.toString()}`, { method: 'PUT' });
+  },
+  batchAssignRoute: async (routeItems) => {
+    return request('/deliveries/route-assignment', {
+      method: 'POST',
+      body: JSON.stringify(routeItems)
+    });
+  },
 
   // Support
   createTicket: async (userId, ticketData) => {

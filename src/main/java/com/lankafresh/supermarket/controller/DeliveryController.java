@@ -55,4 +55,38 @@ public class DeliveryController {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteDelivery(@PathVariable Long id) {
+        try {
+            deliveryService.deleteDelivery(id);
+            return ResponseEntity.ok(Map.of("message", "Delivery request deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{id}/route")
+    public ResponseEntity<?> updateRoute(
+            @PathVariable Long id,
+            @RequestParam(required = false) String routeName,
+            @RequestParam(required = false) Integer stopOrder,
+            @RequestParam(required = false) String vehicleNumber) {
+        try {
+            Delivery updated = deliveryService.updateRouteAssignment(id, routeName, stopOrder, vehicleNumber);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/route-assignment")
+    public ResponseEntity<?> batchAssignRoute(@RequestBody List<Map<String, Object>> routeItems) {
+        try {
+            List<Delivery> updated = deliveryService.batchAssignRoute(routeItems);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
 }

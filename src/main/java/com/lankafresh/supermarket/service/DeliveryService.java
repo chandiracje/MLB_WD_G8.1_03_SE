@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -64,5 +66,55 @@ public class DeliveryService {
         }
 
         return deliveryRepository.save(delivery);
+    }
+
+    @Transactional
+    public void deleteDelivery(Long deliveryId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new RuntimeException("Delivery not found with id: " + deliveryId));
+
+        if (delivery.getStatus() != DeliveryStatus.DELIVERED && delivery.getStatus() != DeliveryStatus.FAILED) {
+            throw new RuntimeException("Only resolved (DELIVERED) or FAILED delivery requests can be deleted.");
+        }
+
+        deliveryRepository.delete(delivery);
+    }
+
+    @Transactional
+    public Delivery updateRouteAssignment(Long deliveryId, String routeName, Integer stopOrder, String vehicleNumber) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new RuntimeException("Delivery not found with id: " + deliveryId));
+
+        if (routeName != null) delivery.setRouteName(routeName);
+        if (stopOrder != null) delivery.setRouteStopOrder(stopOrder);
+        if (vehicleNumber != null) delivery.setVehicleNumber(vehicleNumber);
+
+        return deliveryRepository.save(delivery);
+    }
+
+    @Transactional
+    public List<Delivery> batchAssignRoute(List<Map<String, Object>> routeItems) {
+        List<Delivery> updatedList = new ArrayList<>();
+        if (routeItems == null) return updatedList;
+
+        for (Map<String, Object> item : routeItems) {
+            if (!item.containsKey("deliveryId") || item.get("deliveryId") == null) continue;
+            Long deliveryId = Long.valueOf(item.get("deliveryId").toString());
+            Delivery delivery = deliveryRepository.findById(deliveryId)
+                    .orElseThrow(() -> new RuntimeException("Delivery not found with id: " + deliveryId));
+
+            if (item.containsKey("routeName") && item.get("routeName") != null) {
+                delivery.setRouteName(item.get("routeName").toString());
+            }
+            if (item.containsKey("routeStopOrder") && item.get("routeStopOrder") != null) {
+                delivery.setRouteStopOrder(Integer.valueOf(item.get("routeStopOrder").toString()));
+            }
+            if (item.containsKey("vehicleNumber") && item.get("vehicleNumber") != null) {
+                delivery.setVehicleNumber(item.get("vehicleNumber").toString());
+            }
+
+            updatedList.add(deliveryRepository.save(delivery));
+        }
+        return updatedList;
     }
 }

@@ -35,4 +35,13 @@ public class Delivery {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "route_name", length = 100)
+    private String routeName;
+
+    @Column(name = "route_stop_order")
+    private Integer routeStopOrder;
+
+    @Column(name = "vehicle_number", length = 50)
+    private String vehicleNumber;
 }
