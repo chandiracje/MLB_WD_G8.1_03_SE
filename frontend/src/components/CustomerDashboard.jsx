@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import { 
   IconPackage, IconHeart, IconTruck, IconShield, 
   IconHeadphones, IconClock, IconCheck, IconTrash, 
-  IconPlus, IconAlert, IconUser, IconCart
+  IconPlus, IconAlert, IconUser, IconCart, IconX
 } from './Icons';
 
 export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
@@ -19,6 +19,30 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderFilter, setOrderFilter] = useState('ALL');
+  const [actionConfirm, setActionConfirm] = useState(null); // { type: 'CANCEL' | 'DELETE', order: order }
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  const handleConfirmOrderAction = async () => {
+    if (!actionConfirm?.order?.id) return;
+    const { type, order } = actionConfirm;
+    setIsProcessingAction(true);
+    try {
+      if (type === 'CANCEL') {
+        await api.cancelOrder(order.id);
+        showToast(`Order #${order.id} cancelled successfully. Inventory restored.`, 'success');
+      } else if (type === 'DELETE') {
+        await api.deleteOrder(order.id);
+        showToast(`Order #${order.id} removed from history.`, 'success');
+      }
+      setActionConfirm(null);
+      await fetchOrders();
+    } catch (err) {
+      showToast(err.message || `Failed to ${type === 'CANCEL' ? 'cancel' : 'delete'} order`, 'danger');
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
 
   // Support Tickets State
   const [tickets, setTickets] = useState([]);
@@ -587,16 +611,66 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
                   </div>
 
                   {/* Order Actions */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <button 
-                      onClick={() => {
-                        if (onOpenTracker) onOpenTracker(order.trackingNumber);
-                      }}
-                      className="btn-secondary"
-                      style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <IconTruck size={16} /> Live Track Dispatch
-                    </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div>
+                      {['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(order.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setActionConfirm({ type: 'DELETE', order })}
+                          style={{
+                            padding: '8px 14px',
+                            fontSize: '0.82rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#dc2626',
+                            border: '1px solid #fca5a5',
+                            background: '#fef2f2',
+                            borderRadius: 'var(--radius-md)',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title="Permanently remove this order from history"
+                        >
+                          <IconTrash size={15} /> Delete Order
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setActionConfirm({ type: 'CANCEL', order })}
+                          style={{
+                            padding: '8px 14px',
+                            fontSize: '0.82rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#b91c1c',
+                            border: '1px solid #fecaca',
+                            background: '#fff1f2',
+                            borderRadius: 'var(--radius-md)',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title="Cancel order and restore stock"
+                        >
+                          <IconX size={15} /> Cancel Order
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => {
+                          if (onOpenTracker) onOpenTracker(order.trackingNumber);
+                        }}
+                        className="btn-secondary"
+                        style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <IconTruck size={16} /> Live Track Dispatch
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1068,6 +1142,86 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* Order Cancel / Delete Confirmation Modal */}
+      {actionConfirm && (
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 1100 }}
+          onClick={() => !isProcessingAction && setActionConfirm(null)}
+        >
+          <div 
+            className="modal-content" 
+            style={{ maxWidth: '440px', padding: '24px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: actionConfirm.type === 'CANCEL' ? '#fff7ed' : '#fef2f2',
+                color: actionConfirm.type === 'CANCEL' ? '#c2410c' : '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                {actionConfirm.type === 'CANCEL' ? <IconAlert size={22} /> : <IconTrash size={22} />}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>
+                  {actionConfirm.type === 'CANCEL' ? 'Cancel Order' : 'Delete Order'} #{actionConfirm.order?.id}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Tracking Code: {actionConfirm.order?.trackingNumber || 'LK-PENDING'}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+              {actionConfirm.type === 'CANCEL'
+                ? 'Are you sure you want to cancel this order? Any reserved grocery items will be returned to supermarket stock, and delivery will be cancelled.'
+                : 'Are you sure you want to permanently delete this order record from your order history? This action cannot be undone.'}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isProcessingAction}
+                onClick={() => setActionConfirm(null)}
+                style={{ padding: '8px 16px' }}
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={handleConfirmOrderAction}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 'var(--radius-md)',
+                  background: actionConfirm.type === 'CANCEL' ? '#ea580c' : '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: '700',
+                  cursor: isProcessingAction ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isProcessingAction 
+                  ? 'Processing...' 
+                  : actionConfirm.type === 'CANCEL' 
+                    ? 'Yes, Cancel Order' 
+                    : 'Yes, Delete Order'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

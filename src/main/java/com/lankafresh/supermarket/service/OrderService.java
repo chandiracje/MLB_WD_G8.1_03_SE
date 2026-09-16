@@ -206,8 +206,69 @@ public class OrderService {
                 product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
                 productRepository.save(product);
             }
+
+            deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+                delivery.setStatus(DeliveryStatus.FAILED);
+                delivery.setNotes("Order status changed to " + status);
+                deliveryRepository.save(delivery);
+            });
         }
 
         return orderRepository.save(order);
     }
+
+    @Transactional
+    public Order cancelOrder(Long orderId) {
+        Order order = getOrderById(orderId);
+
+        if (order.getStatus() == OrderStatus.DELIVERED) {
+            throw new RuntimeException("Completed (Delivered) orders cannot be cancelled.");
+        }
+
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+            throw new RuntimeException("Order is already cancelled.");
+        }
+
+        // Restore product inventory
+        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+        for (OrderItem item : items) {
+            Product product = item.getProduct();
+            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+            productRepository.save(product);
+        }
+
+        // Update delivery if exists
+        deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+            delivery.setStatus(DeliveryStatus.FAILED);
+            delivery.setNotes("Cancelled by customer request");
+            deliveryRepository.save(delivery);
+        });
+
+        order.setStatus(OrderStatus.CANCELLED);
+        return orderRepository.save(order);
+    }
+
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        Order order = getOrderById(orderId);
+
+        if (order.getStatus() != OrderStatus.DELIVERED &&
+            order.getStatus() != OrderStatus.CANCELLED &&
+            order.getStatus() != OrderStatus.REFUNDED) {
+            throw new RuntimeException("Only finished (Delivered) or cancelled orders can be deleted. Please cancel active orders first.");
+        }
+
+        // Remove associated delivery record first to maintain relational integrity
+        deliveryRepository.findByOrderId(orderId).ifPresent(deliveryRepository::delete);
+
+        // Remove associated order items
+        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+        if (!items.isEmpty()) {
+            orderItemRepository.deleteAll(items);
+        }
+
+        // Delete the order itself
+        orderRepository.delete(order);
+    }
 }
+

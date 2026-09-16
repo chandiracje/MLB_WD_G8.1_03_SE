@@ -199,6 +199,12 @@ export const api = {
   updateOrderStatus: async (orderId, status) => {
     return request(`/orders/${orderId}/status?status=${status}`, { method: 'PUT' });
   },
+  cancelOrder: async (orderId) => {
+    return request(`/orders/${orderId}/cancel`, { method: 'PUT' });
+  },
+  deleteOrder: async (orderId) => {
+    return request(`/orders/${orderId}`, { method: 'DELETE' });
+  },
 
   // Wishlist
   getWishlist: async (userId) => request(`/wishlist/${userId}`),
