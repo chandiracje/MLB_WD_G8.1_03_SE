@@ -4,11 +4,11 @@ import { api } from '../services/api';
 const AuthContext = createContext();
 
 export const staffAccounts = [
-  { email: "manager@lankafresh.com", role: "MANAGER", roleLabel: "Branch Manager", name: "Nadeesha Perera" },
-  { email: "inventory@lankafresh.com", role: "INVENTORY_STAFF", roleLabel: "Inventory Controller", name: "Ruwan Kumara" },
-  { email: "delivery@lankafresh.com", role: "DELIVERY_STAFF", roleLabel: "Delivery Personnel", name: "Tharindu Silva" },
-  { email: "support@lankafresh.com", role: "SUPPORT_STAFF", roleLabel: "Support Executive", name: "Dilini Fernando" },
-  { email: "finance@lankafresh.com", role: "FINANCE_OFFICER", roleLabel: "Finance Officer", name: "Kasun Jayasinghe" }
+  { id: 1, email: "manager@lankafresh.com", role: "MANAGER", roleLabel: "Branch Manager", name: "Nadeesha Perera" },
+  { id: 2, email: "inventory@lankafresh.com", role: "INVENTORY_STAFF", roleLabel: "Inventory Controller", name: "Ruwan Kumara" },
+  { id: 3, email: "delivery@lankafresh.com", role: "DELIVERY_STAFF", roleLabel: "Delivery Personnel", name: "Tharindu Silva" },
+  { id: 4, email: "support@lankafresh.com", role: "SUPPORT_STAFF", roleLabel: "Support Executive", name: "Dilini Fernando" },
+  { id: 5, email: "finance@lankafresh.com", role: "FINANCE_OFFICER", roleLabel: "Finance Officer", name: "Kasun Jayasinghe" }
 ];
 
 export const AuthProvider = ({ children }) => {
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
       const staff = staffAccounts.find(a => a.email.toLowerCase() === email.toLowerCase());
       if (staff && password === 'password123') {
         const staffUser = {
-          id: staff.email.length,
+          id: staff.id || 2,
           name: staff.name,
           email: staff.email,
           role: staff.role,

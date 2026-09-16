@@ -123,8 +123,12 @@ export const api = {
 
   // Inventory
   getLowStock: async () => request('/inventory/low-stock'),
-  adjustStock: async (productId, userId, quantityChange, reason) => {
-    return request(`/inventory/adjust/${productId}?userId=${userId}`, {
+  adjustStock: async (productId, userId, quantityChange, reason, userEmail) => {
+    const params = new URLSearchParams();
+    if (userId) params.append('userId', userId);
+    if (userEmail) params.append('email', userEmail);
+    const qs = params.toString();
+    return request(`/inventory/adjust/${productId}${qs ? `?${qs}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ quantityChange, reason })
     });

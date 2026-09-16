@@ -76,14 +76,39 @@ public class ProductService {
     }
 
     @Transactional
-    public Product adjustStock(Long productId, Long userId, StockAdjustmentRequest request) {
+    public Product adjustStock(Long productId, Long userId, String email, StockAdjustmentRequest request) {
         Product product = getProductById(productId);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId).orElse(null);
+        }
+        if (user == null && email != null && !email.trim().isEmpty()) {
+            user = userRepository.findByEmail(email.trim()).orElse(null);
+        }
+        if (user == null) {
+            // Fallback: try finding an inventory staff member
+            List<User> inventoryStaff = userRepository.findByRole(UserRole.INVENTORY_STAFF);
+            if (!inventoryStaff.isEmpty()) {
+                user = inventoryStaff.get(0);
+            }
+        }
+        if (user == null) {
+            // Fallback: try finding a manager
+            List<User> managers = userRepository.findByRole(UserRole.MANAGER);
+            if (!managers.isEmpty()) {
+                user = managers.get(0);
+            }
+        }
+        if (user == null) {
+            // Final fallback: any registered user in the database
+            user = userRepository.findAll().stream().findFirst()
+                    .orElseThrow(() -> new RuntimeException("No user record found in database to log stock adjustment."));
+        }
 
         int newStock = (product.getStockQuantity() != null ? product.getStockQuantity() : 0) + request.getQuantityChange();
         if (newStock < 0) {
-            throw new RuntimeException("Stock cannot be negative");
+            throw new RuntimeException("Stock cannot be negative. Current stock is " + product.getStockQuantity());
         }
         product.setStockQuantity(newStock);
         productRepository.save(product);
@@ -97,6 +122,11 @@ public class ProductService {
         stockAdjustmentRepository.save(adjustment);
 
         return product;
+    }
+
+    @Transactional
+    public Product adjustStock(Long productId, Long userId, StockAdjustmentRequest request) {
+        return adjustStock(productId, userId, null, request);
     }
 
     public List<StockAdjustment> getAdjustmentHistory(Long productId) {

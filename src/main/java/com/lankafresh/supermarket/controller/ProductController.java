@@ -80,10 +80,15 @@ public class ProductController {
     @PostMapping("/inventory/adjust/{productId}")
     public ResponseEntity<?> adjustStock(
             @PathVariable Long productId,
-            @RequestParam Long userId,
-            @RequestBody StockAdjustmentRequest request) {
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String email,
+            @RequestBody StockAdjustmentRequest request,
+            java.security.Principal principal) {
         try {
-            Product updated = productService.adjustStock(productId, userId, request);
+            String resolvedEmail = (email != null && !email.trim().isEmpty())
+                    ? email.trim()
+                    : (principal != null ? principal.getName() : null);
+            Product updated = productService.adjustStock(productId, userId, resolvedEmail, request);
             return ResponseEntity.ok(updated);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
