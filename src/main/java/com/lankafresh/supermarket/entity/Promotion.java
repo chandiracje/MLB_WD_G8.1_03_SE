@@ -33,4 +33,7 @@ public class Promotion {
 
     @Column(name = "is_active")
     private Boolean isActive;
+
+    @Column(name = "code", length = 50)
+    private String code;
 }

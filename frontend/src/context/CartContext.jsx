@@ -19,6 +19,22 @@ export const CartProvider = ({ children }) => {
   const [promoCode, setPromoCode] = useState('');
   const [discountPercent, setDiscountPercent] = useState(0);
   const [toast, setToast] = useState(null);
+  const [activePromotions, setActivePromotions] = useState([]);
+
+  const refreshPromotions = async () => {
+    try {
+      const res = await api.getPromotions();
+      if (Array.isArray(res) && res.length > 0) {
+        setActivePromotions(res);
+      }
+    } catch (e) {
+      console.warn("Could not fetch active promotions:", e.message);
+    }
+  };
+
+  useEffect(() => {
+    refreshPromotions();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('lankafresh_cart', JSON.stringify(cartItems));
@@ -112,7 +128,20 @@ export const CartProvider = ({ children }) => {
   };
 
   const applyPromo = (code) => {
+    if (!code) return false;
     const clean = code.trim().toUpperCase();
+
+    // Check loaded active promotions from backend/database
+    const found = activePromotions.find(p => p.code && p.code.trim().toUpperCase() === clean);
+    if (found) {
+      const discount = Number(found.discountPercentage) || 0;
+      setPromoCode(clean);
+      setDiscountPercent(discount);
+      showToast(`Promo Code '${clean}' applied! ${discount}% OFF`);
+      return true;
+    }
+
+    // Static fallback codes
     if (clean === 'WEEKEND15') {
       setPromoCode(clean);
       setDiscountPercent(15);
@@ -124,7 +153,7 @@ export const CartProvider = ({ children }) => {
       showToast("Promo Code 'DAIRY10' applied! 10% OFF");
       return true;
     } else {
-      showToast("Invalid Promo Code", "danger");
+      showToast(`Invalid or expired Promo Code '${clean}'`, "danger");
       return false;
     }
   };
@@ -147,6 +176,8 @@ export const CartProvider = ({ children }) => {
       total,
       promoCode,
       discountPercent,
+      activePromotions,
+      refreshPromotions,
       toast,
       addToCart,
       updateQuantity,

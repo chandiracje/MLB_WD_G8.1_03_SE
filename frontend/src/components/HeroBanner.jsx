@@ -3,7 +3,15 @@ import { useCart } from '../context/CartContext';
 import { IconClock, IconShield, IconTruck } from './Icons';
 
 export const HeroBanner = ({ categories, selectedCategory, onSelectCategory }) => {
-  const { applyPromo } = useCart();
+  const { applyPromo, activePromotions } = useCart();
+
+  // Fallback if no promotions loaded yet
+  const displayedPromos = activePromotions && activePromotions.length > 0
+    ? activePromotions
+    : [
+        { id: 1, name: "Weekend Fresh Harvest Sale", code: "WEEKEND15", discountPercentage: 15 },
+        { id: 2, name: "Dairy Super Saver", code: "DAIRY10", discountPercentage: 10 }
+      ];
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1280px', margin: '0 auto' }}>
@@ -36,20 +44,40 @@ export const HeroBanner = ({ categories, selectedCategory, onSelectCategory }) =
           </p>
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button 
-              onClick={() => applyPromo('WEEKEND15')}
-              style={{ background: 'white', color: '#065f46', fontWeight: '700', padding: '10px 18px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-            >
-              <span>Use Code: <strong>WEEKEND15</strong></span>
-              <span style={{ background: '#d1fae5', color: '#047857', padding: '2px 6px', borderRadius: '6px', fontSize: '0.75rem' }}>15% OFF</span>
-            </button>
-
-            <button 
-              onClick={() => applyPromo('DAIRY10')}
-              style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', fontWeight: '600', padding: '10px 18px', borderRadius: 'var(--radius-md)' }}
-            >
-              <span>Code: <strong>DAIRY10</strong> (10% OFF)</span>
-            </button>
+            {displayedPromos.slice(0, 2).map((promo, idx) => (
+              <button 
+                key={promo.id || idx}
+                onClick={() => applyPromo(promo.code || `PROMO${promo.id}`)}
+                style={idx === 0 ? {
+                  background: 'white', 
+                  color: '#065f46', 
+                  fontWeight: '700', 
+                  padding: '10px 18px', 
+                  borderRadius: 'var(--radius-md)', 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  cursor: 'pointer'
+                } : {
+                  background: 'rgba(255,255,255,0.2)', 
+                  color: 'white', 
+                  border: '1px solid rgba(255,255,255,0.4)', 
+                  fontWeight: '600', 
+                  padding: '10px 18px', 
+                  borderRadius: 'var(--radius-md)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                <span>Code: <strong>{promo.code || `PROMO${promo.id}`}</strong></span>
+                <span style={{ background: idx === 0 ? '#d1fae5' : 'rgba(255,255,255,0.25)', color: idx === 0 ? '#047857' : 'white', padding: '2px 6px', borderRadius: '6px', fontSize: '0.75rem' }}>
+                  {promo.discountPercentage}% OFF
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -86,6 +114,88 @@ export const HeroBanner = ({ categories, selectedCategory, onSelectCategory }) =
           </div>
         </div>
       </div>
+
+      {/* Dynamic Storefront Promotional Campaigns Showcase */}
+      {displayedPromos && displayedPromos.length > 0 && (
+        <div style={{ marginTop: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>
+                🏷️ Active Promotional Campaigns & Exclusive Deals
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Click voucher code or apply button to activate savings</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            {displayedPromos.map(promo => (
+              <div 
+                key={promo.id} 
+                className="glass-card" 
+                style={{ 
+                  padding: '18px 20px', 
+                  borderRadius: 'var(--radius-md)', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>
+                      {promo.name}
+                    </h4>
+                    <span style={{ 
+                      background: '#dcfce7', 
+                      color: '#15803d', 
+                      fontSize: '0.8rem', 
+                      fontWeight: '800', 
+                      padding: '3px 10px', 
+                      borderRadius: '20px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🔥 {promo.discountPercentage}% OFF
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+                    {promo.description || "Limited time promotional campaign discount across selected supermarket categories."}
+                  </p>
+                  {promo.endDate && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                      Valid until: <strong>{new Date(promo.endDate).toLocaleDateString()}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                  <div 
+                    onClick={() => applyPromo(promo.code || `PROMO${promo.id}`)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                    title="Click to apply"
+                  >
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Voucher:</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.9rem', color: 'var(--primary)', background: 'var(--bg-hover)', padding: '3px 8px', borderRadius: '4px', border: '1px dashed var(--primary)' }}>
+                      {promo.code || `PROMO${promo.id}`}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => applyPromo(promo.code || `PROMO${promo.id}`)}
+                    className="btn-primary"
+                    style={{ padding: '6px 14px', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                  >
+                    Apply Code ✨
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Category Pills Bar */}
       <div style={{ marginTop: '28px', display: 'flex', alignItems: 'center', gap: '10px', overflowX: 'auto', paddingBottom: '8px' }}>

@@ -142,8 +142,32 @@ public class ProductController {
         return ResponseEntity.ok(productService.getActivePromotions());
     }
 
+    @GetMapping("/promotions/all")
+    public ResponseEntity<List<Promotion>> getAllPromotions() {
+        return ResponseEntity.ok(productService.getAllPromotions());
+    }
+
     @PostMapping("/promotions")
     public ResponseEntity<Promotion> createPromotion(@RequestBody Promotion promotion) {
         return ResponseEntity.ok(productService.createPromotion(promotion));
+    }
+
+    @PutMapping("/promotions/{id}")
+    public ResponseEntity<?> updatePromotion(@PathVariable Long id, @RequestBody Promotion promotion) {
+        try {
+            return ResponseEntity.ok(productService.updatePromotion(id, promotion));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/promotions/{id}")
+    public ResponseEntity<?> deletePromotion(@PathVariable Long id) {
+        try {
+            productService.deletePromotion(id);
+            return ResponseEntity.ok(Map.of("message", "Promotion deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }

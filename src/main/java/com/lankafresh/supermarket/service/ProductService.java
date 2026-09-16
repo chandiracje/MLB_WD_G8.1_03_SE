@@ -201,11 +201,63 @@ public class ProductService {
 
     // ─── Promotions ──────────────────────────────────────────────────────────────
 
+    public List<Promotion> getAllPromotions() {
+        return promotionRepository.findAll();
+    }
+
     public List<Promotion> getActivePromotions() {
         return promotionRepository.findByIsActiveTrue();
     }
 
     public Promotion createPromotion(Promotion promotion) {
+        if (promotion.getIsActive() == null) {
+            promotion.setIsActive(true);
+        }
+        if (promotion.getStartDate() == null) {
+            promotion.setStartDate(java.time.LocalDateTime.now());
+        }
+        if (promotion.getEndDate() == null) {
+            promotion.setEndDate(java.time.LocalDateTime.now().plusDays(30));
+        }
+        if (promotion.getCode() != null) {
+            promotion.setCode(promotion.getCode().trim().toUpperCase());
+        }
         return promotionRepository.save(promotion);
+    }
+
+    public Promotion updatePromotion(Long id, Promotion updated) {
+        Promotion existing = promotionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Promotion not found with ID: " + id));
+
+        if (updated.getName() != null) {
+            existing.setName(updated.getName().trim());
+        }
+        if (updated.getDescription() != null) {
+            existing.setDescription(updated.getDescription());
+        }
+        if (updated.getDiscountPercentage() != null) {
+            existing.setDiscountPercentage(updated.getDiscountPercentage());
+        }
+        if (updated.getCode() != null) {
+            existing.setCode(updated.getCode().trim().toUpperCase());
+        }
+        if (updated.getStartDate() != null) {
+            existing.setStartDate(updated.getStartDate());
+        }
+        if (updated.getEndDate() != null) {
+            existing.setEndDate(updated.getEndDate());
+        }
+        if (updated.getIsActive() != null) {
+            existing.setIsActive(updated.getIsActive());
+        }
+
+        return promotionRepository.save(existing);
+    }
+
+    public void deletePromotion(Long id) {
+        if (!promotionRepository.existsById(id)) {
+            throw new RuntimeException("Promotion not found with ID: " + id);
+        }
+        promotionRepository.deleteById(id);
     }
 }

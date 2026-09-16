@@ -119,7 +119,24 @@ export const api = {
     return request(`/categories/${id}`, { method: 'DELETE' });
   },
 
+  // Promotions
   getPromotions: async () => request('/promotions'),
+  getAllPromotions: async () => request('/promotions/all'),
+  createPromotion: async (promo) => {
+    return request('/promotions', {
+      method: 'POST',
+      body: JSON.stringify(promo)
+    });
+  },
+  updatePromotion: async (id, promo) => {
+    return request(`/promotions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(promo)
+    });
+  },
+  deletePromotion: async (id) => {
+    return request(`/promotions/${id}`, { method: 'DELETE' });
+  },
 
   // Inventory
   getLowStock: async () => request('/inventory/low-stock'),

@@ -95,6 +95,7 @@ public class DataInitializer implements CommandLineRunner {
     private void initPromotions() {
         Promotion promo1 = Promotion.builder()
                 .name("Weekend Fresh Harvest Sale")
+                .code("WEEKEND15")
                 .description("Get up to 15% OFF on all organic vegetables and farm fruits!")
                 .discountPercentage(new BigDecimal("15.00"))
                 .startDate(LocalDateTime.now().minusDays(1))
@@ -104,6 +105,7 @@ public class DataInitializer implements CommandLineRunner {
 
         Promotion promo2 = Promotion.builder()
                 .name("Dairy Super Saver")
+                .code("DAIRY10")
                 .description("Enjoy 10% OFF on all cheese and pasteurized milk items.")
                 .discountPercentage(new BigDecimal("10.00"))
                 .startDate(LocalDateTime.now().minusDays(2))
