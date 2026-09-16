@@ -135,7 +135,7 @@ public class ProductController {
         }
     }
 
-    // ─── Promotions ──────────────────────────────────────────────────────────────
+    // ─── Promotions
 
     @GetMapping("/promotions")
     public ResponseEntity<List<Promotion>> getPromotions() {
