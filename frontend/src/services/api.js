@@ -209,10 +209,22 @@ export const api = {
 
   // Procurement
   getSuppliers: async () => request('/procurement/suppliers'),
+  getSupplierById: async (id) => request(`/procurement/suppliers/${id}`),
   createSupplier: async (supplierData) => {
     return request('/procurement/suppliers', {
       method: 'POST',
       body: JSON.stringify(supplierData)
+    });
+  },
+  updateSupplier: async (id, supplierData) => {
+    return request(`/procurement/suppliers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(supplierData)
+    });
+  },
+  deleteSupplier: async (id) => {
+    return request(`/procurement/suppliers/${id}`, {
+      method: 'DELETE'
     });
   },
   getPurchaseOrders: async () => request('/procurement/orders'),

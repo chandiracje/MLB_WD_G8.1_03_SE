@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, initialSampleProducts } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { IconBarChart, IconPackage, IconDollar, IconPlus, IconTrash, IconCheck, IconX, IconAlert } from './Icons';
+import { IconBarChart, IconPackage, IconDollar, IconPlus, IconTrash, IconCheck, IconX, IconAlert, IconBuilding, IconSearch } from './Icons';
 
 export const ManagerDashboard = () => {
   const { demoAccounts } = useAuth();
@@ -9,7 +9,8 @@ export const ManagerDashboard = () => {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'orders', 'staff'
+  const [suppliers, setSuppliers] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'suppliers', 'orders', 'staff'
 
   // Product modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -32,6 +33,18 @@ export const ManagerDashboard = () => {
   const [catFormParent, setCatFormParent] = useState('');
   const [catFormError, setCatFormError] = useState('');
   const [catActionMsg, setCatActionMsg] = useState('');
+
+  // Supplier modal state
+  const [isSupModalOpen, setIsSupModalOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState(null);
+  const [supFormName, setSupFormName] = useState('');
+  const [supFormContact, setSupFormContact] = useState('');
+  const [supFormEmail, setSupFormEmail] = useState('');
+  const [supFormPhone, setSupFormPhone] = useState('');
+  const [supFormAddress, setSupFormAddress] = useState('');
+  const [supFormError, setSupFormError] = useState('');
+  const [supActionMsg, setSupActionMsg] = useState('');
+  const [supSearchTerm, setSupSearchTerm] = useState('');
 
   useEffect(() => {
     loadData();
@@ -62,6 +75,12 @@ export const ManagerDashboard = () => {
     } catch (e) {
       console.warn('Could not fetch categories:', e.message);
     }
+    try {
+      const sup = await api.getSuppliers();
+      setSuppliers(sup || []);
+    } catch (e) {
+      console.warn('Could not fetch suppliers:', e.message);
+    }
   };
 
   // Derived data helpers
@@ -72,6 +91,18 @@ export const ManagerDashboard = () => {
     if (formMainCategory) return formMainCategory;
     return null;
   };
+
+  const filteredSuppliers = suppliers.filter(s => {
+    if (!supSearchTerm.trim()) return true;
+    const term = supSearchTerm.toLowerCase();
+    return (
+      (s.name && s.name.toLowerCase().includes(term)) ||
+      (s.contactName && s.contactName.toLowerCase().includes(term)) ||
+      (s.email && s.email.toLowerCase().includes(term)) ||
+      (s.phone && s.phone.toLowerCase().includes(term)) ||
+      (s.address && s.address.toLowerCase().includes(term))
+    );
+  });
 
   // ─── Product handlers ───────────────────────────────────────────────────────
 
@@ -239,6 +270,76 @@ export const ManagerDashboard = () => {
     }
   };
 
+  // ─── Supplier handlers ──────────────────────────────────────────────────────
+  const openAddSupplier = () => {
+    setEditingSupplier(null);
+    setSupFormName('');
+    setSupFormContact('');
+    setSupFormEmail('');
+    setSupFormPhone('');
+    setSupFormAddress('');
+    setSupFormError('');
+    setIsSupModalOpen(true);
+  };
+
+  const openEditSupplier = (s) => {
+    setEditingSupplier(s);
+    setSupFormName(s.name || '');
+    setSupFormContact(s.contactName || '');
+    setSupFormEmail(s.email || '');
+    setSupFormPhone(s.phone || '');
+    setSupFormAddress(s.address || '');
+    setSupFormError('');
+    setIsSupModalOpen(true);
+  };
+
+  const handleSaveSupplier = async (e) => {
+    e.preventDefault();
+    setSupFormError('');
+    if (!supFormName.trim()) {
+      setSupFormError('Supplier company name is required.');
+      return;
+    }
+
+    const payload = {
+      name: supFormName.trim(),
+      contactName: supFormContact.trim(),
+      email: supFormEmail.trim(),
+      phone: supFormPhone.trim(),
+      address: supFormAddress.trim()
+    };
+
+    try {
+      if (editingSupplier) {
+        await api.updateSupplier(editingSupplier.id, payload);
+        setSupActionMsg(`Supplier "${payload.name}" updated successfully!`);
+      } else {
+        await api.createSupplier(payload);
+        setSupActionMsg(`Supplier "${payload.name}" registered successfully!`);
+      }
+      await loadData();
+      setIsSupModalOpen(false);
+      setEditingSupplier(null);
+      setTimeout(() => setSupActionMsg(''), 4000);
+    } catch (err) {
+      setSupFormError(err.message || 'Failed to save supplier details.');
+    }
+  };
+
+  const handleDeleteSupplier = async (s) => {
+    if (!window.confirm(`Are you sure you want to remove supplier "${s.name}"?`)) {
+      return;
+    }
+    try {
+      await api.deleteSupplier(s.id);
+      await loadData();
+      setSupActionMsg(`Supplier "${s.name}" removed successfully.`);
+      setTimeout(() => setSupActionMsg(''), 4000);
+    } catch (err) {
+      alert(err.message || 'Failed to delete supplier.');
+    }
+  };
+
   // ─── Tab style helper ───────────────────────────────────────────────────────
   const tabBtn = (key, label) => (
     <button
@@ -274,6 +375,13 @@ export const ManagerDashboard = () => {
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', fontWeight: '600' }}
           >
             <IconPlus size={16} /> Add Category
+          </button>
+          <button
+            onClick={openAddSupplier}
+            className="btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', fontWeight: '600' }}
+          >
+            <IconBuilding size={16} /> Add Supplier
           </button>
         </div>
       </div>
@@ -323,6 +431,7 @@ export const ManagerDashboard = () => {
       <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {tabBtn('overview', `Product Catalog (${products.length})`)}
         {tabBtn('categories', `Categories (${categories.length})`)}
+        {tabBtn('suppliers', `Suppliers (${suppliers.length})`)}
         {tabBtn('orders', `Customer Orders (${orders.length})`)}
         {tabBtn('staff', 'Staff & Access Controls')}
       </div>
@@ -463,6 +572,115 @@ export const ManagerDashboard = () => {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Tab: Suppliers Management */}
+      {activeTab === 'suppliers' && (
+        <div>
+          {supActionMsg && (
+            <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 16px', borderRadius: '8px', marginBottom: '16px', fontWeight: '600', fontSize: '0.9rem' }}>
+              ✓ {supActionMsg}
+            </div>
+          )}
+
+          {/* Search bar & Add button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', minWidth: '280px', flex: '1', maxWidth: '450px' }}>
+              <input
+                type="text"
+                placeholder="Search suppliers by name, contact, phone, or address..."
+                value={supSearchTerm}
+                onChange={(e) => setSupSearchTerm(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', paddingLeft: '36px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+              />
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+                <IconSearch size={16} />
+              </span>
+            </div>
+
+            <button onClick={openAddSupplier} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <IconPlus size={16} /> Register New Supplier
+            </button>
+          </div>
+
+          {/* Suppliers Cards Grid */}
+          {filteredSuppliers.length === 0 ? (
+            <div className="glass-card" style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '2.8rem', marginBottom: '12px' }}>🏢</div>
+              <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '6px' }}>
+                {supSearchTerm ? 'No matching suppliers found' : 'No suppliers registered yet'}
+              </h3>
+              <p style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+                {supSearchTerm ? 'Try adjusting your search criteria.' : 'Add your farm or merchandise suppliers to maintain contact details and restock inventory.'}
+              </p>
+              {!supSearchTerm && (
+                <button onClick={openAddSupplier} className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <IconPlus size={16} /> Add First Supplier
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px' }}>
+              {filteredSuppliers.map(s => (
+                <div key={s.id} className="glass-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '10px', borderRadius: '10px' }}>
+                          <IconBuilding size={20} />
+                        </div>
+                        <div>
+                          <h4 style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>{s.name}</h4>
+                          <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '999px', fontWeight: '600' }}>
+                            Supplier #{s.id}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => openEditSupplier(s)}
+                          className="btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSupplier(s)}
+                          style={{ color: '#ef4444', padding: '4px 8px', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', borderRadius: '4px' }}
+                          title="Delete Supplier"
+                        >
+                          <IconTrash size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Details Box */}
+                    <div style={{ background: 'var(--bg-main)', padding: '12px', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600', width: '75px' }}>Contact:</span>
+                        <strong style={{ color: 'var(--text-main)' }}>{s.contactName || '—'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600', width: '75px' }}>Phone:</span>
+                        <span>{s.phone ? <a href={`tel:${s.phone}`} style={{ color: 'var(--text-main)', textDecoration: 'none' }}>{s.phone}</a> : '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600', width: '75px' }}>Email:</span>
+                        <span>{s.email ? <a href={`mailto:${s.email}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>{s.email}</a> : '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600', width: '75px' }}>Address:</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{s.address || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -679,6 +897,105 @@ export const ManagerDashboard = () => {
                   {editingCategory ? 'Update Category' : 'Create Category'}
                 </button>
                 <button type="button" onClick={() => setIsCatModalOpen(false)} className="btn-secondary" style={{ padding: '11px 18px' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add / Edit Supplier Modal ────────────────────────────────────────── */}
+      {isSupModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsSupModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <IconBuilding size={20} />
+                {editingSupplier ? 'Edit Supplier Details' : 'Register New Supplier'}
+              </h2>
+              <button onClick={() => setIsSupModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <IconX size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSupplier} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {supFormError && (
+                <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #fca5a5' }}>
+                  {supFormError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                  Company / Business Name *
+                </label>
+                <input
+                  required
+                  value={supFormName}
+                  onChange={(e) => setSupFormName(e.target.value)}
+                  placeholder="e.g. Lanka Fresh Farms (Pvt) Ltd"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                  Contact Representative Name
+                </label>
+                <input
+                  value={supFormContact}
+                  onChange={(e) => setSupFormContact(e.target.value)}
+                  placeholder="e.g. Ruwan Perera"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={supFormPhone}
+                    onChange={(e) => setSupFormPhone(e.target.value)}
+                    placeholder="e.g. 0112345678"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={supFormEmail}
+                    onChange={(e) => setSupFormEmail(e.target.value)}
+                    placeholder="e.g. supply@lankafresh.lk"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                  Warehouse / Physical Address
+                </label>
+                <textarea
+                  rows={2}
+                  value={supFormAddress}
+                  onChange={(e) => setSupFormAddress(e.target.value)}
+                  placeholder="e.g. 120/4 High Level Road, Maharagama"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '11px' }}>
+                  {editingSupplier ? 'Update Supplier' : 'Register Supplier'}
+                </button>
+                <button type="button" onClick={() => setIsSupModalOpen(false)} className="btn-secondary" style={{ padding: '11px 18px' }}>
                   Cancel
                 </button>
               </div>

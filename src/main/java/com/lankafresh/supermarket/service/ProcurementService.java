@@ -23,8 +23,48 @@ public class ProcurementService {
         return supplierRepository.findAll();
     }
 
+    public Supplier getSupplierById(Long id) {
+        return supplierRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + id));
+    }
+
     public Supplier createSupplier(Supplier supplier) {
         return supplierRepository.save(supplier);
+    }
+
+    @Transactional
+    public Supplier updateSupplier(Long id, Supplier updated) {
+        Supplier existing = supplierRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + id));
+
+        if (updated.getName() != null && !updated.getName().isBlank()) {
+            existing.setName(updated.getName().trim());
+        }
+        if (updated.getContactName() != null) {
+            existing.setContactName(updated.getContactName().trim());
+        }
+        if (updated.getEmail() != null) {
+            existing.setEmail(updated.getEmail().trim());
+        }
+        if (updated.getPhone() != null) {
+            existing.setPhone(updated.getPhone().trim());
+        }
+        if (updated.getAddress() != null) {
+            existing.setAddress(updated.getAddress().trim());
+        }
+
+        return supplierRepository.save(existing);
+    }
+
+    @Transactional
+    public void deleteSupplier(Long id) {
+        if (!supplierRepository.existsById(id)) {
+            throw new RuntimeException("Supplier not found with id: " + id);
+        }
+        if (purchaseOrderRepository.existsBySupplierId(id)) {
+            throw new RuntimeException("Cannot delete supplier: There are existing purchase orders associated with this supplier.");
+        }
+        supplierRepository.deleteById(id);
     }
 
     public List<PurchaseOrder> getAllPurchaseOrders() {

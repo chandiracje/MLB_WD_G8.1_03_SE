@@ -25,9 +25,37 @@ public class ProcurementController {
         return ResponseEntity.ok(procurementService.getAllSuppliers());
     }
 
+    @GetMapping("/suppliers/{id}")
+    public ResponseEntity<?> getSupplierById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(procurementService.getSupplierById(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
+        }
+    }
+
     @PostMapping("/suppliers")
     public ResponseEntity<Supplier> createSupplier(@RequestBody Supplier supplier) {
         return ResponseEntity.ok(procurementService.createSupplier(supplier));
+    }
+
+    @PutMapping("/suppliers/{id}")
+    public ResponseEntity<?> updateSupplier(@PathVariable Long id, @RequestBody Supplier supplier) {
+        try {
+            return ResponseEntity.ok(procurementService.updateSupplier(id, supplier));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/suppliers/{id}")
+    public ResponseEntity<?> deleteSupplier(@PathVariable Long id) {
+        try {
+            procurementService.deleteSupplier(id);
+            return ResponseEntity.ok(Map.of("message", "Supplier deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @GetMapping("/orders")
