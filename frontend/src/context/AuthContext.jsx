@@ -38,6 +38,7 @@ export const AuthProvider = ({ children }) => {
       setToken(res.token);
       localStorage.setItem('token', res.token);
       return res;
+
     } catch (e) {
       // Fallback verification for demo/offline testing if backend network fails
       const staff = staffAccounts.find(a => a.email.toLowerCase() === email.toLowerCase());
