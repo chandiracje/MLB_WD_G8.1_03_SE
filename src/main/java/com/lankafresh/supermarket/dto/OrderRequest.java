@@ -16,4 +16,17 @@ public class OrderRequest {
     private String customerName;
     private String customerEmail;
     private String customerPhone;
+
+    // Decorator Pattern custom add-on flags (Optional)
+    private Boolean giftWrap;
+    private Boolean coldChain;
+    private Boolean ecoBag;
+
+    // Specific payment details (Optional)
+    private String cardNumber;
+    private String cardExpiry;
+    private String cardCvv;
+    private String paypalEmail;
+    private String bankReference;
+    private String walletProvider;
 }

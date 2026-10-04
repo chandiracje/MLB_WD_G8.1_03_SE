@@ -6,14 +6,16 @@ import {
   IconPackage, IconHeart, IconTruck, IconShield, 
   IconHeadphones, IconClock, IconCheck, IconTrash, 
   IconPlus, IconAlert, IconUser, IconCart, IconX,
-  IconShoppingBag, IconFileText, IconSparkles, IconMessageSquare
+  IconShoppingBag, IconFileText, IconSparkles, IconMessageSquare, IconMapPin
 } from './Icons';
+import { LocationPickerModal } from './LocationPickerModal';
 
 export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
   const { user, updateUser } = useAuth();
   const { addToCart, wishlist, removeFromWishlist, showToast } = useCart();
 
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'wishlist' | 'profile' | 'support'
+  const [isProfileLocationPickerOpen, setIsProfileLocationPickerOpen] = useState(false);
   
   // Orders State
   const [orders, setOrders] = useState([]);
@@ -847,9 +849,65 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
               </div>
 
               <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
-                  Default Delivery Address
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <IconMapPin size={15} style={{ color: 'var(--primary)' }} /> Default Delivery Address
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileLocationPickerOpen(true)}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      color: '#059669',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <IconMapPin size={13} /> Pin on Map / Use GPS
+                  </button>
+                </div>
+
+                {profileAddress.includes('[GPS:') && (
+                  <div style={{
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    marginBottom: '8px',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></span>
+                      <span><strong>GPS Coordinates Attached:</strong> Ready for express delivery dispatch</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsProfileLocationPickerOpen(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#059669',
+                        fontWeight: '700',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Adjust Pin
+                    </button>
+                  </div>
+                )}
+
                 <textarea 
                   rows={3}
                   value={profileAddress}
@@ -1225,6 +1283,17 @@ export const CustomerDashboard = ({ onBackToStore, onOpenTracker }) => {
           </div>
         </div>
       )}
+
+      {/* Interactive Location Pinning Modal for Profile Address */}
+      <LocationPickerModal
+        isOpen={isProfileLocationPickerOpen}
+        onClose={() => setIsProfileLocationPickerOpen(false)}
+        initialAddress={profileAddress}
+        onConfirmLocation={(loc) => {
+          setProfileAddress(loc.formattedAddress);
+          showToast(`Default delivery doorstep pinned: ${loc.streetAddress}`, 'success');
+        }}
+      />
 
     </div>
   );

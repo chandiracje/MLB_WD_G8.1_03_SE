@@ -38,7 +38,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/api/auth/**", "/api/products/**", "/api/categories/**", "/api/promotions/**", "/api/init/**", "/error").permitAll()
+                .requestMatchers("/", "/api/auth/**", "/api/products/**", "/api/categories/**", "/api/promotions/**", "/api/patterns/**", "/api/init/**", "/error").permitAll()
                 .anyRequest().permitAll() // Permit endpoints to simplify development & testing while keeping role data accessible
             );
 

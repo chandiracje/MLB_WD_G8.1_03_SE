@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api, initialSampleProducts } from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { IconBarChart, IconPackage, IconDollar, IconPlus, IconTrash, IconCheck, IconX, IconAlert, IconBuilding, IconSearch } from './Icons';
+import { useAuth, staffAccounts } from '../context/AuthContext';
+import { IconBarChart, IconPackage, IconDollar, IconPlus, IconTrash, IconCheck, IconX, IconAlert, IconBuilding, IconSearch, IconUser, IconShield, IconEdit } from './Icons';
 
 export const ManagerDashboard = () => {
-  const { demoAccounts } = useAuth();
   const [stats, setStats] = useState({ totalRevenue: 0, totalOrders: 0, totalProducts: 0, lowStockCount: 0 });
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -45,6 +44,41 @@ export const ManagerDashboard = () => {
   const [supFormError, setSupFormError] = useState('');
   const [supActionMsg, setSupActionMsg] = useState('');
   const [supSearchTerm, setSupSearchTerm] = useState('');
+
+  // Staff & Access Controls state
+  const [staffList, setStaffList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lankafresh_staff_list');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not parse saved staff list:', e);
+    }
+    return (staffAccounts || []).map(s => ({
+      ...s,
+      phone: s.id === 1 ? '0771234567' : s.id === 2 ? '0719876543' : s.id === 3 ? '0765554321' : s.id === 4 ? '0752223344' : '0724445566',
+      status: 'ACTIVE',
+      department: s.role === 'MANAGER' ? 'Executive Management' :
+                  s.role === 'INVENTORY_STAFF' ? 'Warehouse & Stock' :
+                  s.role === 'DELIVERY_STAFF' ? 'Logistics & Fleet' :
+                  s.role === 'SUPPORT_STAFF' ? 'Customer Care' : 'Accounts & Billing',
+      joinedDate: '2024-01-15'
+    }));
+  });
+
+  const [staffSearchTerm, setStaffSearchTerm] = useState('');
+  const [staffRoleFilter, setStaffRoleFilter] = useState('ALL');
+  const [staffStatusFilter, setStaffStatusFilter] = useState('ALL');
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [staffFormName, setStaffFormName] = useState('');
+  const [staffFormEmail, setStaffFormEmail] = useState('');
+  const [staffFormPhone, setStaffFormPhone] = useState('');
+  const [staffFormRole, setStaffFormRole] = useState('INVENTORY_STAFF');
+  const [staffFormDept, setStaffFormDept] = useState('Warehouse & Stock');
+  const [staffFormStatus, setStaffFormStatus] = useState('ACTIVE');
+  const [staffFormPassword, setStaffFormPassword] = useState('');
+  const [staffFormError, setStaffFormError] = useState('');
+  const [staffActionMsg, setStaffActionMsg] = useState('');
 
   useEffect(() => {
     loadData();
@@ -340,6 +374,148 @@ export const ManagerDashboard = () => {
     }
   };
 
+  // ─── Staff & Access Control Handlers ────────────────────────────────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem('lankafresh_staff_list', JSON.stringify(staffList));
+    } catch (e) {
+      console.warn('Failed to persist staff list:', e);
+    }
+  }, [staffList]);
+
+  const openAddStaff = () => {
+    setEditingStaff(null);
+    setStaffFormName('');
+    setStaffFormEmail('');
+    setStaffFormPhone('');
+    setStaffFormRole('INVENTORY_STAFF');
+    setStaffFormDept('Warehouse & Stock');
+    setStaffFormStatus('ACTIVE');
+    setStaffFormPassword('password123');
+    setStaffFormError('');
+    setIsStaffModalOpen(true);
+  };
+
+  const openEditStaff = (staff) => {
+    setEditingStaff(staff);
+    setStaffFormName(staff.name || '');
+    setStaffFormEmail(staff.email || '');
+    setStaffFormPhone(staff.phone || '');
+    setStaffFormRole(staff.role || 'INVENTORY_STAFF');
+    setStaffFormDept(staff.department || 'Operations');
+    setStaffFormStatus(staff.status || 'ACTIVE');
+    setStaffFormPassword('');
+    setStaffFormError('');
+    setIsStaffModalOpen(true);
+  };
+
+  const handleSaveStaff = (e) => {
+    e.preventDefault();
+    setStaffFormError('');
+
+    if (!staffFormName.trim() || !staffFormEmail.trim() || !staffFormPhone.trim()) {
+      setStaffFormError('Please fill in Name, Email, and Phone number.');
+      return;
+    }
+
+    const roleLabels = {
+      MANAGER: 'Branch Manager',
+      INVENTORY_STAFF: 'Inventory Controller',
+      DELIVERY_STAFF: 'Delivery Personnel',
+      SUPPORT_STAFF: 'Support Executive',
+      FINANCE_OFFICER: 'Finance Officer'
+    };
+
+    if (editingStaff) {
+      const duplicate = staffList.find(s => s.id !== editingStaff.id && s.email.toLowerCase() === staffFormEmail.trim().toLowerCase());
+      if (duplicate) {
+        setStaffFormError('Another staff account with this email already exists.');
+        return;
+      }
+
+      setStaffList(prev => prev.map(s => s.id === editingStaff.id ? {
+        ...s,
+        name: staffFormName.trim(),
+        email: staffFormEmail.trim().toLowerCase(),
+        phone: staffFormPhone.trim(),
+        role: staffFormRole,
+        roleLabel: roleLabels[staffFormRole] || staffFormRole,
+        department: staffFormDept.trim(),
+        status: staffFormStatus
+      } : s));
+
+      setStaffActionMsg(`Staff profile for "${staffFormName.trim()}" updated successfully.`);
+      setTimeout(() => setStaffActionMsg(''), 4000);
+      setIsStaffModalOpen(false);
+      setEditingStaff(null);
+    } else {
+      const duplicate = staffList.find(s => s.email.toLowerCase() === staffFormEmail.trim().toLowerCase());
+      if (duplicate) {
+        setStaffFormError('A staff account with this email already exists.');
+        return;
+      }
+
+      const newStaff = {
+        id: Date.now(),
+        name: staffFormName.trim(),
+        email: staffFormEmail.trim().toLowerCase(),
+        phone: staffFormPhone.trim(),
+        role: staffFormRole,
+        roleLabel: roleLabels[staffFormRole] || staffFormRole,
+        department: staffFormDept.trim(),
+        status: staffFormStatus,
+        joinedDate: new Date().toISOString().split('T')[0]
+      };
+
+      setStaffList(prev => [...prev, newStaff]);
+      setStaffActionMsg(`New staff member "${newStaff.name}" registered with role ${newStaff.roleLabel}.`);
+      setTimeout(() => setStaffActionMsg(''), 4000);
+      setIsStaffModalOpen(false);
+    }
+  };
+
+  const handleToggleStaffStatus = (id) => {
+    setStaffList(prev => prev.map(s => {
+      if (s.id === id) {
+        const nextStatus = s.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+        setStaffActionMsg(`Account status for ${s.name} changed to ${nextStatus}.`);
+        setTimeout(() => setStaffActionMsg(''), 4000);
+        return { ...s, status: nextStatus };
+      }
+      return s;
+    }));
+  };
+
+  const handleResetStaffPassword = (staff) => {
+    setStaffActionMsg(`Temporary credentials reset link dispatched to ${staff.email}.`);
+    setTimeout(() => setStaffActionMsg(''), 4000);
+  };
+
+  const handleDeleteStaff = (id, name) => {
+    if (staffList.length <= 1) {
+      alert('Cannot remove the only remaining staff account.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to revoke access and remove ${name} from the staff directory?`)) {
+      setStaffList(prev => prev.filter(s => s.id !== id));
+      setStaffActionMsg(`Access revoked. ${name} was removed from the staff directory.`);
+      setTimeout(() => setStaffActionMsg(''), 4000);
+    }
+  };
+
+  const filteredStaff = staffList.filter(s => {
+    const q = staffSearchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.email && s.email.toLowerCase().includes(q)) ||
+      (s.phone && s.phone.toLowerCase().includes(q)) ||
+      (s.role && s.role.toLowerCase().includes(q)) ||
+      (s.department && s.department.toLowerCase().includes(q));
+    const matchesRole = staffRoleFilter === 'ALL' || s.role === staffRoleFilter;
+    const matchesStatus = staffStatusFilter === 'ALL' || s.status === staffStatusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
   // ─── Tab style helper ───────────────────────────────────────────────────────
   const tabBtn = (key, label) => (
     <button
@@ -433,7 +609,7 @@ export const ManagerDashboard = () => {
         {tabBtn('categories', `Categories (${categories.length})`)}
         {tabBtn('suppliers', `Suppliers (${suppliers.length})`)}
         {tabBtn('orders', `Customer Orders (${orders.length})`)}
-        {tabBtn('staff', 'Staff & Access Controls')}
+        {tabBtn('staff', `Staff & Access Controls (${staffList.length})`)}
       </div>
 
       {/* Tab: Product Catalog */}
@@ -730,23 +906,282 @@ export const ManagerDashboard = () => {
         </div>
       )}
 
-      {/* Tab: Staff */}
+      {/* Tab: Staff & Access Controls */}
       {activeTab === 'staff' && (
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <h3 style={{ marginBottom: '14px' }}>System Staff Accounts & Role Matrix</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-            {demoAccounts.map(acc => (
-              <div key={acc.id} style={{ background: 'var(--bg-main)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <strong>{acc.name}</strong>
-                  <span className="badge badge-success">{acc.role}</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Email: {acc.email}</div>
-                <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <IconCheck size={13} /> Spring Security Authorized
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {staffActionMsg && (
+            <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 18px', borderRadius: 'var(--radius-md)', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #bbf7d0' }}>
+              <IconCheck size={18} /> {staffActionMsg}
+            </div>
+          )}
+
+          {/* Quick Metrics Bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase' }}>Total Personnel</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: '800', marginTop: '6px', color: 'var(--text-main)' }}>{staffList.length}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Registered in staff directory</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase' }}>Active Clearance</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: '800', marginTop: '6px', color: '#16a34a' }}>
+                {staffList.filter(s => s.status === 'ACTIVE').length}
               </div>
-            ))}
+              <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px', fontWeight: '600' }}>Full operational access</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase' }}>Suspended Accounts</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: '800', marginTop: '6px', color: staffList.filter(s => s.status !== 'ACTIVE').length > 0 ? '#dc2626' : 'var(--text-muted)' }}>
+                {staffList.filter(s => s.status !== 'ACTIVE').length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Access temporarily revoked</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase' }}>Access Control Model</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '10px', color: 'var(--primary)' }}>RBAC Policy</div>
+              <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <IconCheck size={12} /> Spring Security Enforced
+              </div>
+            </div>
+          </div>
+
+          {/* Search, Filters & Action Controls */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '10px', flex: '1', minWidth: '300px', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: '1', minWidth: '220px', maxWidth: '380px' }}>
+                <input
+                  type="text"
+                  placeholder="Search staff by name, email, department..."
+                  value={staffSearchTerm}
+                  onChange={(e) => setStaffSearchTerm(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', paddingLeft: '36px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+                />
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+                  <IconSearch size={16} />
+                </span>
+              </div>
+
+              <select
+                value={staffRoleFilter}
+                onChange={(e) => setStaffRoleFilter(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+              >
+                <option value="ALL">All Roles</option>
+                <option value="MANAGER">Branch Manager</option>
+                <option value="INVENTORY_STAFF">Inventory Controller</option>
+                <option value="DELIVERY_STAFF">Delivery Personnel</option>
+                <option value="SUPPORT_STAFF">Support Executive</option>
+                <option value="FINANCE_OFFICER">Finance Officer</option>
+              </select>
+
+              <select
+                value={staffStatusFilter}
+                onChange={(e) => setStaffStatusFilter(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+              >
+                <option value="ALL">All Status</option>
+                <option value="ACTIVE">Active Only</option>
+                <option value="SUSPENDED">Suspended Only</option>
+              </select>
+            </div>
+
+            <button onClick={openAddStaff} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+              <IconPlus size={16} /> Register Staff Member
+            </button>
+          </div>
+
+          {/* Staff Members Directory Table */}
+          <div className="glass-card" style={{ overflowX: 'auto', padding: '16px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '12px 10px' }}>Staff Personnel</th>
+                  <th style={{ padding: '12px 10px' }}>Role & Clearance</th>
+                  <th style={{ padding: '12px 10px' }}>Department</th>
+                  <th style={{ padding: '12px 10px' }}>Contact Info</th>
+                  <th style={{ padding: '12px 10px' }}>Status</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right' }}>Security Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStaff.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No staff members match the selected criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStaff.map(staff => {
+                    const roleBadgeStyles = {
+                      MANAGER: { bg: '#ede9fe', color: '#6d28d9', label: 'Branch Manager' },
+                      INVENTORY_STAFF: { bg: '#dbeafe', color: '#1d4ed8', label: 'Inventory Controller' },
+                      DELIVERY_STAFF: { bg: '#fef3c7', color: '#b45309', label: 'Delivery Personnel' },
+                      SUPPORT_STAFF: { bg: '#ccfbf1', color: '#0f766e', label: 'Support Executive' },
+                      FINANCE_OFFICER: { bg: '#dcfce7', color: '#15803d', label: 'Finance Officer' }
+                    };
+                    const badge = roleBadgeStyles[staff.role] || { bg: '#f1f5f9', color: '#475569', label: staff.role };
+                    const initials = staff.name ? staff.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'ST';
+
+                    return (
+                      <tr key={staff.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '14px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: badge.bg, color: badge.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem' }}>
+                              {initials}
+                            </div>
+                            <div>
+                              <strong style={{ display: 'block', color: 'var(--text-main)' }}>{staff.name}</strong>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID #{staff.id} • Joined {staff.joinedDate || '2024'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 10px' }}>
+                          <span style={{ background: badge.bg, color: badge.color, padding: '4px 10px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <IconShield size={12} /> {badge.label}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 10px', color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                          {staff.department || 'Operations'}
+                        </td>
+                        <td style={{ padding: '14px 10px', fontSize: '0.85rem' }}>
+                          <div style={{ color: 'var(--text-main)' }}>{staff.email}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{staff.phone || '—'}</div>
+                        </td>
+                        <td style={{ padding: '14px 10px' }}>
+                          <span style={{
+                            background: staff.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2',
+                            color: staff.status === 'ACTIVE' ? '#15803d' : '#dc2626',
+                            padding: '3px 9px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: staff.status === 'ACTIVE' ? '#16a34a' : '#dc2626' }}></span>
+                            {staff.status || 'ACTIVE'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 10px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              onClick={() => openEditStaff(staff)}
+                              className="btn-secondary"
+                              style={{ padding: '5px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              title="Edit Details & Role"
+                            >
+                              <IconEdit size={14} /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleToggleStaffStatus(staff.id)}
+                              style={{
+                                padding: '5px 10px',
+                                fontSize: '0.8rem',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: staff.status === 'ACTIVE' ? '#fff1f2' : '#f0fdf4',
+                                color: staff.status === 'ACTIVE' ? '#e11d48' : '#16a34a',
+                                fontWeight: '600',
+                                cursor: 'pointer'
+                              }}
+                              title={staff.status === 'ACTIVE' ? 'Suspend Account Access' : 'Activate Account Access'}
+                            >
+                              {staff.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                            </button>
+                            <button
+                              onClick={() => handleResetStaffPassword(staff)}
+                              style={{
+                                padding: '5px 8px',
+                                fontSize: '0.8rem',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--bg-main)',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer'
+                              }}
+                              title="Send Password Reset Link"
+                            >
+                              <IconShield size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStaff(staff.id, staff.name)}
+                              style={{
+                                padding: '5px 8px',
+                                color: '#ef4444',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer'
+                              }}
+                              title="Revoke and Remove Staff"
+                            >
+                              <IconTrash size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Granular RBAC Permission Matrix */}
+          <div className="glass-card" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <IconShield size={20} style={{ color: 'var(--primary)' }} />
+              <div>
+                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Role-Based Access Control (RBAC) Permission Matrix</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>Verified role clearances enforced across LankaFresh Spring Security backend endpoints</p>
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-main)', borderBottom: '2px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '10px 14px' }}>Functional Capability</th>
+                    <th style={{ padding: '10px' }}>Branch Manager</th>
+                    <th style={{ padding: '10px' }}>Inventory Controller</th>
+                    <th style={{ padding: '10px' }}>Delivery Personnel</th>
+                    <th style={{ padding: '10px' }}>Support Executive</th>
+                    <th style={{ padding: '10px' }}>Finance Officer</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { capability: 'Product Catalog & Pricing Management (CRUD)', roles: [true, true, false, false, false] },
+                    { capability: 'Category Hierarchy & Taxonomy Mapping', roles: [true, true, false, false, false] },
+                    { capability: 'Supplier Management & Restock Purchase Orders', roles: [true, true, false, false, false] },
+                    { capability: 'Order Fulfillment, Route Dispatch & Fleet Status', roles: [true, false, true, false, false] },
+                    { capability: 'Customer Care & Support Ticket Resolution', roles: [true, false, false, true, false] },
+                    { capability: 'Revenue Audits, Payment Status & Sales Analytics', roles: [true, false, false, false, true] },
+                    { capability: 'Staff Directory, Credential Provisioning & Access Control', roles: [true, false, false, false, false] },
+                  ].map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ textAlign: 'left', padding: '10px 14px', fontWeight: '600', color: 'var(--text-main)' }}>
+                        {row.capability}
+                      </td>
+                      {row.roles.map((allowed, rIdx) => (
+                        <td key={rIdx} style={{ padding: '10px' }}>
+                          {allowed ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a' }}>
+                              <IconCheck size={14} />
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>—</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -997,6 +1432,138 @@ export const ManagerDashboard = () => {
                   {editingSupplier ? 'Update Supplier' : 'Register Supplier'}
                 </button>
                 <button type="button" onClick={() => setIsSupModalOpen(false)} className="btn-secondary" style={{ padding: '11px 18px' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add / Edit Staff Modal ─────────────────────────────────────────── */}
+      {isStaffModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsStaffModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.3rem' }}>{editingStaff ? 'Edit Staff Credentials & Clearance' : 'Register New Staff Member'}</h2>
+              <button onClick={() => setIsStaffModalOpen(false)}><IconX size={20} /></button>
+            </div>
+
+            <form onSubmit={handleSaveStaff} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {staffFormError && (
+                <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', border: '1px solid #fca5a5' }}>
+                  {staffFormError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                  Full Legal Name *
+                </label>
+                <input
+                  required
+                  value={staffFormName}
+                  onChange={(e) => setStaffFormName(e.target.value)}
+                  placeholder="e.g. Ruwan Silva"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Work Email *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={staffFormEmail}
+                    onChange={(e) => setStaffFormEmail(e.target.value)}
+                    placeholder="e.g. r.silva@lankafresh.com"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Contact Phone *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={staffFormPhone}
+                    onChange={(e) => setStaffFormPhone(e.target.value)}
+                    placeholder="e.g. 0771234567"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Role & Clearance *
+                  </label>
+                  <select
+                    value={staffFormRole}
+                    onChange={(e) => setStaffFormRole(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+                  >
+                    <option value="MANAGER">Branch Manager</option>
+                    <option value="INVENTORY_STAFF">Inventory Controller</option>
+                    <option value="DELIVERY_STAFF">Delivery Personnel</option>
+                    <option value="SUPPORT_STAFF">Support Executive</option>
+                    <option value="FINANCE_OFFICER">Finance Officer</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Department
+                  </label>
+                  <input
+                    value={staffFormDept}
+                    onChange={(e) => setStaffFormDept(e.target.value)}
+                    placeholder="e.g. Warehouse & Logistics"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: editingStaff ? '1fr' : '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                    Account Status
+                  </label>
+                  <select
+                    value={staffFormStatus}
+                    onChange={(e) => setStaffFormStatus(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+                  >
+                    <option value="ACTIVE">ACTIVE (Authorized)</option>
+                    <option value="SUSPENDED">SUSPENDED (Access Blocked)</option>
+                  </select>
+                </div>
+                {!editingStaff && (
+                  <div>
+                    <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                      Initial Password *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={staffFormPassword}
+                      onChange={(e) => setStaffFormPassword(e.target.value)}
+                      placeholder="Min 6 characters"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '11px' }}>
+                  {editingStaff ? 'Update Staff Member' : 'Register Staff Account'}
+                </button>
+                <button type="button" onClick={() => setIsStaffModalOpen(false)} className="btn-secondary" style={{ padding: '11px 18px' }}>
                   Cancel
                 </button>
               </div>

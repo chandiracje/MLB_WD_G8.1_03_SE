@@ -26,6 +26,15 @@ export const DeliveryDashboard = () => {
   const [schedNotes, setSchedNotes] = useState('');
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
+  const getGoogleMapsLink = (addr) => {
+    if (!addr) return 'https://maps.google.com';
+    const match = addr.match(/\[GPS:\s*([0-9.-]+),\s*([0-9.-]+)\]/i);
+    if (match) {
+      return `https://www.google.com/maps/search/?api=1&query=${match[1]},${match[2]}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+  };
+
   // Route Assignment Configuration State (Tab 2)
   const [selectedRoutePresetId, setSelectedRoutePresetId] = useState(PREDEFINED_DELIVERY_ROUTES[0].id);
   const [routeName, setRouteName] = useState(PREDEFINED_DELIVERY_ROUTES[0].name);
@@ -970,7 +979,7 @@ export const DeliveryDashboard = () => {
 
                         {/* Direct GPS Map Link */}
                         <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.order?.deliveryAddress || '')}`}
+                          href={getGoogleMapsLink(d.order?.deliveryAddress)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn-secondary"

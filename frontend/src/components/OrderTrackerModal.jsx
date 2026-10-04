@@ -343,9 +343,31 @@ export const OrderTrackerModal = ({ isOpen, onClose, initialOrders = [], default
                 )}
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                    <IconMapPin size={16} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--text-main)' }} />
-                    <span><strong>Delivery Address:</strong> {selectedOrder.deliveryAddress}</span>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
+                      <IconMapPin size={16} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--text-main)' }} />
+                      <span><strong>Delivery Address:</strong> {selectedOrder.deliveryAddress}</span>
+                    </div>
+                    {selectedOrder.deliveryAddress?.includes('[GPS:') && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${selectedOrder.deliveryAddress.match(/\[GPS:\s*([0-9.-]+),\s*([0-9.-]+)\]/i)?.[1]},${selectedOrder.deliveryAddress.match(/\[GPS:\s*([0-9.-]+),\s*([0-9.-]+)\]/i)?.[2]}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#059669',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          background: '#dcfce7',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title="View customer pinned coordinates in Google Maps"
+                      >
+                        📍 View Pinned Spot
+                      </a>
+                    )}
                   </div>
                   
                   {/* Assigned Route Corridor */}

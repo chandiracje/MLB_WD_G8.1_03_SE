@@ -303,7 +303,7 @@ export const AuthModal = ({ isOpen, onClose, onStaffLoginSuccess, onOpenTracker,
                       required 
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
-                      placeholder="e.g. yourname@gmail.com or staff@lankafresh.com"
+                      placeholder="e.g. name@gmail.com"
                       style={{ width: '100%' }} 
                     />
                   </div>

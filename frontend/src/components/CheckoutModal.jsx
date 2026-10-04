@@ -20,6 +20,7 @@ import {
   IconPhone 
 } from './Icons';
 import { PREDEFINED_DELIVERY_ROUTES } from '../constants/deliveryRoutes';
+import { LocationPickerModal } from './LocationPickerModal';
 
 // Sri Lankan phone regex (e.g. 0771234567, +94771234567, 771234567)
 const SL_PHONE_REGEX = /^(?:0|\+94)?7[0-9]{8}$/;
@@ -56,6 +57,28 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
   const [address, setAddress] = useState(user?.address || '45/2 Galle Road, Mount Lavinia');
   const [phone, setPhone] = useState(user?.phone || '0771234567');
   
+  // Interactive Location Pinning state
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [pinnedCoordinates, setPinnedCoordinates] = useState(() => {
+    if (user?.address) {
+      const match = user.address.match(/\[GPS:\s*([0-9.-]+),\s*([0-9.-]+)\]/i);
+      if (match) return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+    }
+    return { lat: 6.8380, lng: 79.8630 };
+  });
+
+  const handleLocationConfirmed = (loc) => {
+    setAddress(loc.formattedAddress);
+    setPinnedCoordinates({ lat: loc.latitude, lng: loc.longitude });
+    if (loc.corridorRoute) {
+      setDeliveryRoute(loc.corridorRoute);
+    }
+    if (errors.address) {
+      setErrors(prev => ({ ...prev, address: null }));
+    }
+    showToast(`Doorstep location pinned: ${loc.streetAddress}! Route matched to ${loc.corridorRoute}.`, 'success');
+  };
+  
   // Delivery Route & Schedule details
   const [deliveryRoute, setDeliveryRoute] = useState(PREDEFINED_DELIVERY_ROUTES[0].name);
   const [customRoute, setCustomRoute] = useState('');
@@ -85,6 +108,11 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
 
   // Bank Transfer details
   const [bankRef, setBankRef] = useState('');
+
+  // Decorator Pattern custom packaging options
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [coldChain, setColdChain] = useState(false);
+  const [ecoBag, setEcoBag] = useState(false);
 
   // Field validation errors
   const [errors, setErrors] = useState({});
@@ -238,6 +266,14 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
         customerName: user ? user.name : guestName.trim(),
         customerEmail: user ? user.email : guestEmail.trim(),
         customerPhone: user ? phone.trim() : guestPhone.trim(),
+        giftWrap,
+        coldChain,
+        ecoBag,
+        cardNumber: paymentMethod === 'CARD' ? cardNumber.replace(/\s/g, '') : undefined,
+        cardExpiry: paymentMethod === 'CARD' ? cardExpiry : undefined,
+        cardCvv: paymentMethod === 'CARD' ? cardCvv : undefined,
+        bankReference: paymentMethod === 'BANK' ? bankRef.trim() : undefined,
+        walletProvider: paymentMethod === 'WALLET' ? walletProvider : undefined,
         items: cartItems.map(item => ({
           productId: item.product.id,
           quantity: item.quantity
@@ -368,11 +404,68 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                 </h3>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {/* Delivery Address */}
+                  {/* Delivery Address with Pin on Map */}
                   <div>
-                    <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                      Delivery Address *
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <IconMapPin size={15} style={{ color: 'var(--primary)' }} /> Delivery Address & Doorstep Location *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsLocationPickerOpen(true)}
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.1)',
+                          color: '#059669',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.78rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <IconMapPin size={13} /> {pinnedCoordinates ? 'Adjust Pin on Map' : 'Pin on Map / Use GPS'}
+                      </button>
+                    </div>
+
+                    {pinnedCoordinates && (
+                      <div style={{
+                        background: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        marginBottom: '8px',
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></span>
+                          <span><strong>Doorstep Pinned:</strong> {pinnedCoordinates.lat.toFixed(4)}° N, {pinnedCoordinates.lng.toFixed(4)}° E</span>
+                          <span style={{ color: 'var(--text-muted)', marginLeft: '4px' }}>• Courier will navigate straight to this pin</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsLocationPickerOpen(true)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#059669',
+                            fontWeight: '700',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          Change
+                        </button>
+                      </div>
+                    )}
+
                     <textarea 
                       rows={2}
                       value={address}
@@ -820,14 +913,78 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                 )}
               </div>
 
+              {/* Special Packaging & Value Add-ons (Structural: Decorator Pattern) */}
+              <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🎁</span> <span>Custom Packaging & Handling Add-ons</span>
+                  <span style={{ fontSize: '0.72rem', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: '600' }}>
+                    Decorator Pattern
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+                  Dynamically customize your grocery package. Each selected add-on decorates your order at runtime:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem', color: 'var(--text-main)', cursor: 'pointer', padding: '6px 10px', borderRadius: '6px', background: giftWrap ? '#f0fdf4' : 'var(--bg-card)', border: giftWrap ? '1px solid #86efac' : '1px solid var(--border)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={giftWrap} 
+                      onChange={(e) => setGiftWrap(e.target.checked)} 
+                      style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <strong>Luxury Gift Wrap & Greeting Card</strong>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Satin ribbon wrap with custom personalized message</div>
+                    </div>
+                    <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.82rem' }}>+ Rs. 150.00</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem', color: 'var(--text-main)', cursor: 'pointer', padding: '6px 10px', borderRadius: '6px', background: coldChain ? '#eff6ff' : 'var(--bg-card)', border: coldChain ? '1px solid #93c5fd' : '1px solid var(--border)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={coldChain} 
+                      onChange={(e) => setColdChain(e.target.checked)} 
+                      style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <strong>Cold-Chain Thermal Wrap & Ice Packs</strong>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Insulated pouch maintaining fresh milk, meats & chilled items at 4°C</div>
+                    </div>
+                    <span style={{ fontWeight: '700', color: '#2563eb', fontSize: '0.82rem' }}>+ Rs. 250.00</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem', color: 'var(--text-main)', cursor: 'pointer', padding: '6px 10px', borderRadius: '6px', background: ecoBag ? '#fefce8' : 'var(--bg-card)', border: ecoBag ? '1px solid #fde047' : '1px solid var(--border)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={ecoBag} 
+                      onChange={(e) => setEcoBag(e.target.checked)} 
+                      style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <strong>Eco-Friendly Reusable Jute Carry Bag</strong>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sustainable 100% biodegradable bag for long-term household reuse</div>
+                    </div>
+                    <span style={{ fontWeight: '700', color: '#ca8a04', fontSize: '0.82rem' }}>+ Rs. 75.00</span>
+                  </label>
+                </div>
+              </div>
+
               {/* Order Total Breakdown */}
               <div style={{ background: 'var(--bg-main)', padding: '14px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.95rem' }}>Total Payable Amount:</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Includes all taxes and packaging ({cartItems.length} items)</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Includes groceries ({cartItems.length} items)
+                    {(giftWrap || coldChain || ecoBag) && (
+                      <span style={{ color: 'var(--primary)', marginLeft: '4px', fontWeight: '600' }}>
+                        + Rs. {((giftWrap ? 150 : 0) + (coldChain ? 250 : 0) + (ecoBag ? 75 : 0)).toFixed(2)} packaging
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--primary)' }}>
-                  Rs. {total.toFixed(2)}
+                  Rs. {(total + (giftWrap ? 150 : 0) + (coldChain ? 250 : 0) + (ecoBag ? 75 : 0)).toFixed(2)}
                 </div>
               </div>
 
@@ -837,7 +994,7 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                 className="btn-primary"
                 style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1.05rem', fontWeight: '700', cursor: 'pointer' }}
               >
-                {isSubmitting ? 'Processing Payment...' : `Confirm & Pay Rs. ${total.toFixed(2)} (${getMethodLabel(paymentMethod)})`}
+                {isSubmitting ? 'Processing Payment...' : `Confirm & Pay Rs. ${(total + (giftWrap ? 150 : 0) + (coldChain ? 250 : 0) + (ecoBag ? 75 : 0)).toFixed(2)} (${getMethodLabel(paymentMethod)})`}
               </button>
             </form>
           </>
@@ -905,6 +1062,16 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
           </div>
         )}
       </div>
+
+      {/* Interactive Location Pinning Modal */}
+      <LocationPickerModal
+        isOpen={isLocationPickerOpen}
+        onClose={() => setIsLocationPickerOpen(false)}
+        initialAddress={address}
+        initialLat={pinnedCoordinates?.lat}
+        initialLng={pinnedCoordinates?.lng}
+        onConfirmLocation={handleLocationConfirmed}
+      />
     </div>
   );
 };

@@ -4,6 +4,16 @@ import com.lankafresh.supermarket.dto.CartItemRequest;
 import com.lankafresh.supermarket.dto.OrderRequest;
 import com.lankafresh.supermarket.entity.*;
 import com.lankafresh.supermarket.repository.*;
+import com.lankafresh.supermarket.pattern.decorator.*;
+import com.lankafresh.supermarket.pattern.factory.DeliveryVehicle;
+import com.lankafresh.supermarket.pattern.factory.DeliveryVehicleFactory;
+import com.lankafresh.supermarket.pattern.factory.PaymentStrategyFactory;
+import com.lankafresh.supermarket.pattern.observer.*;
+import com.lankafresh.supermarket.pattern.singleton.SupermarketSystemConfig;
+import com.lankafresh.supermarket.pattern.strategy.PaymentContext;
+import com.lankafresh.supermarket.pattern.strategy.PaymentResult;
+import com.lankafresh.supermarket.pattern.strategy.PaymentStrategy;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,6 +36,22 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final DeliveryRepository deliveryRepository;
     private final PasswordEncoder passwordEncoder;
+
+    // Behavioral: Observer Pattern dependencies
+    private final OrderStatusSubject orderStatusSubject;
+    private final CustomerNotificationObserver customerNotificationObserver;
+    private final InventoryAlertObserver inventoryAlertObserver;
+    private final DeliveryDispatchObserver deliveryDispatchObserver;
+    private final FinanceLedgerObserver financeLedgerObserver;
+
+    @PostConstruct
+    public void registerObservers() {
+        // Register Concrete Observers with the Subject upon service startup (Slides 36-39)
+        orderStatusSubject.addObserver(customerNotificationObserver);
+        orderStatusSubject.addObserver(inventoryAlertObserver);
+        orderStatusSubject.addObserver(deliveryDispatchObserver);
+        orderStatusSubject.addObserver(financeLedgerObserver);
+    }
 
     @Transactional
     public Order placeGuestOrder(OrderRequest request) {
@@ -80,7 +106,8 @@ public class OrderService {
                 .orElseGet(() -> cartRepository.save(Cart.builder().user(user).build()));
 
         List<CartItemRequest> directItems = request.getItems();
-        BigDecimal totalAmount = BigDecimal.ZERO;
+        BigDecimal rawSubtotal = BigDecimal.ZERO;
+        int totalQuantity = 0;
 
         if (directItems != null && !directItems.isEmpty()) {
             // Validate direct items from checkout request
@@ -91,7 +118,8 @@ public class OrderService {
                     throw new RuntimeException("Item '" + product.getName() + "' exceeds available stock (" + product.getStockQuantity() + " remaining).");
                 }
                 BigDecimal itemTotal = product.getPrice().multiply(BigDecimal.valueOf(cir.getQuantity()));
-                totalAmount = totalAmount.add(itemTotal);
+                rawSubtotal = rawSubtotal.add(itemTotal);
+                totalQuantity += cir.getQuantity();
             }
         } else {
             // Read from DB cart
@@ -105,12 +133,59 @@ public class OrderService {
                     throw new RuntimeException("Item '" + product.getName() + "' exceeds available stock (" + product.getStockQuantity() + " remaining).");
                 }
                 BigDecimal itemTotal = product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
-                totalAmount = totalAmount.add(itemTotal);
+                rawSubtotal = rawSubtotal.add(itemTotal);
+                totalQuantity += item.getQuantity();
             }
         }
 
-        String method = (request.getPaymentMethod() != null && !request.getPaymentMethod().isBlank()) ? request.getPaymentMethod() : "CARD";
-        String pStatus = (method.toUpperCase().contains("COD") || method.toUpperCase().contains("CASH")) ? "PENDING_COD" : "PAID";
+        // =========================================================================
+        // 1. Structural: Decorator Design Pattern (Slides 37-49)
+        // Dynamically wrap base order cost with optional value-added services
+        // =========================================================================
+        OrderPricingComponent pricing = new BaseOrderCost(rawSubtotal);
+
+        if (Boolean.TRUE.equals(request.getGiftWrap())) {
+            pricing = new GiftWrappingDecorator(pricing);
+        }
+        if (Boolean.TRUE.equals(request.getColdChain())) {
+            pricing = new ColdChainPackagingDecorator(pricing);
+        }
+        if (Boolean.TRUE.equals(request.getEcoBag())) {
+            pricing = new EcoFriendlyBagDecorator(pricing);
+        }
+
+        boolean isExpress = request.getDeliverySlot() != null &&
+                request.getDeliverySlot().toLowerCase().contains("express");
+        if (isExpress) {
+            pricing = new ExpressDeliveryDecorator(pricing);
+        }
+
+        BigDecimal totalAmount = pricing.getCost();
+        String pricingDescription = pricing.getDescription();
+
+        // =========================================================================
+        // 2. Behavioral: Strategy Pattern & Creational: Factory Pattern (Slides 10-36)
+        // Factory instantiates interchangeable PaymentStrategy algorithm
+        // =========================================================================
+        String trackingNumber = "LK-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        PaymentStrategy paymentStrategy = PaymentStrategyFactory.getPaymentStrategy(request.getPaymentMethod());
+
+        PaymentContext paymentContext = PaymentContext.builder()
+                .orderTrackingNumber(trackingNumber)
+                .customerName(user.getName())
+                .customerEmail(user.getEmail())
+                .customerPhone(user.getPhone())
+                .deliveryAddress(request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank()
+                        ? request.getDeliveryAddress() : user.getAddress())
+                .cardNumber(request.getCardNumber())
+                .cardExpiry(request.getCardExpiry())
+                .cardCvv(request.getCardCvv())
+                .paypalEmail(request.getPaypalEmail())
+                .bankReference(request.getBankReference())
+                .walletProvider(request.getWalletProvider())
+                .build();
+
+        PaymentResult paymentResult = paymentStrategy.pay(totalAmount, paymentContext);
 
         // Create Order
         Order order = Order.builder()
@@ -119,9 +194,9 @@ public class OrderService {
                 .status(OrderStatus.PLACED)
                 .deliveryAddress(request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank() ? request.getDeliveryAddress() : user.getAddress())
                 .deliverySlot(request.getDeliverySlot() != null && !request.getDeliverySlot().isBlank() ? request.getDeliverySlot() : "Express Delivery (Within 60 Mins)")
-                .trackingNumber("LK-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
-                .paymentMethod(method)
-                .paymentStatus(pStatus)
+                .trackingNumber(trackingNumber)
+                .paymentMethod(paymentStrategy.getMethodName())
+                .paymentStatus(paymentResult.getPaymentStatus())
                 .build();
 
         order = orderRepository.save(order);
@@ -161,6 +236,14 @@ public class OrderService {
         // Clear customer cart in database if any
         cartItemRepository.deleteByCartId(cart.getId());
 
+        // =========================================================================
+        // 3. Creational: Factory Pattern for Delivery Vehicle Allocation (Slides 29-34)
+        // Selects optimal vehicle (Bike, Van, Refrigerated Truck) based on order load
+        // =========================================================================
+        boolean requiresColdChain = Boolean.TRUE.equals(request.getColdChain());
+        DeliveryVehicle vehicle = DeliveryVehicleFactory.selectVehicleForOrder(totalQuantity, isExpress, requiresColdChain);
+        String vehicleDispatchNote = vehicle.dispatch(order.getId(), order.getTrackingNumber(), order.getDeliveryAddress());
+
         // Create Delivery Record
         LocalDateTime estimatedTime = null;
         if (request.getScheduledTime() != null && !request.getScheduledTime().isBlank()) {
@@ -177,9 +260,17 @@ public class OrderService {
                 .status(DeliveryStatus.PENDING)
                 .routeName(request.getDeliveryRoute() != null && !request.getDeliveryRoute().isBlank() ? request.getDeliveryRoute().trim() : null)
                 .estimatedTime(estimatedTime)
-                .notes("Order awaiting dispatch assignment")
+                .notes(vehicleDispatchNote)
                 .build();
         deliveryRepository.save(delivery);
+
+        // =========================================================================
+        // 4. Behavioral: Observer Pattern (Part I Slides 28-42)
+        // ConcreteSubject broadcasts state changes to registered observers
+        // =========================================================================
+        orderStatusSubject.notifyObservers(order, "ORDER_PLACED",
+                String.format("Order placed. Pricing: [%s] | Payment: %s (%s) | %s",
+                        pricingDescription, paymentStrategy.getMethodName(), paymentResult.getPaymentStatus(), vehicleDispatchNote));
 
         return order;
     }
@@ -227,7 +318,13 @@ public class OrderService {
             });
         }
 
-        return orderRepository.save(order);
+        order = orderRepository.save(order);
+
+        // Behavioral: Observer Pattern notification
+        orderStatusSubject.notifyObservers(order, "STATUS_UPDATED",
+                "Order #" + order.getId() + " (" + order.getTrackingNumber() + ") status transitioned to: " + status);
+
+        return order;
     }
 
     @Transactional
@@ -258,7 +355,17 @@ public class OrderService {
         });
 
         order.setStatus(OrderStatus.CANCELLED);
-        return orderRepository.save(order);
+        order = orderRepository.save(order);
+
+        // Behavioral: Observer Pattern notification
+        orderStatusSubject.notifyObservers(order, "ORDER_CANCELLED",
+                "Order #" + order.getId() + " (" + order.getTrackingNumber() + ") cancelled by customer. Stock restored to inventory.");
+
+        return order;
+    }
+
+    public OrderStatusSubject getOrderStatusSubject() {
+        return orderStatusSubject;
     }
 
     @Transactional
