@@ -1,6 +1,6 @@
 # MLB_WD_G8.1_03_SE
 
-<b>MLB G8.1 03 AIML Project </b> 
+<b>MLB G8.1 03 SE Project </b> 
 
 <h2>Web-based Supermarket Ordering System</h2>
 
