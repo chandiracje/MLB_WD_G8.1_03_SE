@@ -38,6 +38,26 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
+    private void initUsers() {
+        String encodedPassword = passwordEncoder.encode("password123");
+
+        List<User> initialUsers = Arrays.asList(
+                User.builder().name("Nadeesha Perera").email("manager@lankafresh.com").password(encodedPassword).phone("0771234567").address("123 Main Street, Colombo 03").role(UserRole.MANAGER).build(),
+                User.builder().name("Ruwan Kumara").email("inventory@lankafresh.com").password(encodedPassword).phone("0719876543").address("Branch Warehouse, Colombo").role(UserRole.INVENTORY_STAFF).build(),
+                User.builder().name("Tharindu Silva").email("delivery@lankafresh.com").password(encodedPassword).phone("0765554321").address("Logistics Hub, Colombo").role(UserRole.DELIVERY_STAFF).build(),
+                User.builder().name("Dilini Fernando").email("support@lankafresh.com").password(encodedPassword).phone("0752223344").address("Help Desk Office").role(UserRole.SUPPORT_STAFF).build(),
+                User.builder().name("Kasun Jayasinghe").email("finance@lankafresh.com").password(encodedPassword).phone("0724445566").address("Finance Division").role(UserRole.FINANCE_OFFICER).build(),
+                User.builder().name("Sahan Silva").email("customer@gmail.com").password(encodedPassword).phone("0781112233").address("45/2 Galle Road, Mount Lavinia").role(UserRole.CUSTOMER).build()
+        );
+
+        for (User u : initialUsers) {
+            User saved = userRepository.save(u);
+            if (saved.getRole() == UserRole.CUSTOMER) {
+                cartRepository.save(Cart.builder().user(saved).build());
+            }
+        }
+    }
+
     private Category getOrCreateCategory(String name) {
         return categoryRepository.findByName(name)
                 .orElseGet(() -> categoryRepository.save(Category.builder().name(name).build()));
