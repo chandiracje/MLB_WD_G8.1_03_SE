@@ -18,8 +18,7 @@ import {
   IconStore, 
   IconBuilding, 
   IconPhone 
-} from './Icons';
-import { PREDEFINED_DELIVERY_ROUTES } from '../constants/deliveryRoutes';
+import { PREDEFINED_DELIVERY_ROUTES, getAllDeliveryRoutes, findOptimalRouteForAddress } from '../constants/deliveryRoutes';
 import { LocationPickerModal } from './LocationPickerModal';
 
 // Sri Lankan phone regex (e.g. 0771234567, +94771234567, 771234567)
@@ -67,11 +66,20 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
     return { lat: 6.8380, lng: 79.8630 };
   });
 
+  // Track if user manually picked a route or if it was auto-matched
+  const [hasManuallyChosenRoute, setHasManuallyChosenRoute] = useState(false);
+  const [autoMatchedRoute, setAutoMatchedRoute] = useState(() => {
+    const initialAddr = user?.address || '45/2 Galle Road, Mount Lavinia';
+    return findOptimalRouteForAddress(initialAddr) || null;
+  });
+
   const handleLocationConfirmed = (loc) => {
     setAddress(loc.formattedAddress);
     setPinnedCoordinates({ lat: loc.latitude, lng: loc.longitude });
     if (loc.corridorRoute) {
       setDeliveryRoute(loc.corridorRoute);
+      setHasManuallyChosenRoute(true);
+      setAutoMatchedRoute(null);
     }
     if (errors.address) {
       setErrors(prev => ({ ...prev, address: null }));
@@ -80,7 +88,11 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
   };
   
   // Delivery Route & Schedule details
-  const [deliveryRoute, setDeliveryRoute] = useState(PREDEFINED_DELIVERY_ROUTES[0].name);
+  const [deliveryRoute, setDeliveryRoute] = useState(() => {
+    const initialAddr = user?.address || '45/2 Galle Road, Mount Lavinia';
+    const matched = findOptimalRouteForAddress(initialAddr);
+    return matched ? matched.name : PREDEFINED_DELIVERY_ROUTES[0].name;
+  });
   const [customRoute, setCustomRoute] = useState('');
   const [scheduleType, setScheduleType] = useState('EXPRESS'); // 'EXPRESS' | 'SCHEDULED'
   const [scheduledDate, setScheduledDate] = useState(() => {
@@ -470,13 +482,30 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                       rows={2}
                       value={address}
                       onChange={(e) => {
-                        setAddress(e.target.value);
+                        const newAddr = e.target.value;
+                        setAddress(newAddr);
                         if (errors.address) setErrors(prev => ({ ...prev, address: null }));
+
+                        // Automatically match and select delivery route corridor when address changes
+                        if (!hasManuallyChosenRoute) {
+                          const matched = findOptimalRouteForAddress(newAddr);
+                          if (matched) {
+                            setDeliveryRoute(matched.name);
+                            setAutoMatchedRoute(matched);
+                          } else {
+                            setAutoMatchedRoute(null);
+                          }
+                        }
                       }}
                       placeholder="House/Apt No, Street Name, City, Landmark..."
                       style={{ width: '100%', resize: 'vertical', borderColor: errors.address ? '#ef4444' : undefined }}
                     />
                     {errors.address && <span style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '2px', display: 'block' }}>{errors.address}</span>}
+                    {autoMatchedRoute && (
+                      <div style={{ marginTop: '4px', fontSize: '0.74rem', color: '#15803d', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        <IconCheck size={12} /> Auto-matched route: <strong>{autoMatchedRoute.shortName}</strong>
+                      </div>
+                    )}
                   </div>
 
                   {user && (
@@ -505,16 +534,19 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                         <IconNavigation size={15} /> Delivery Route Corridor
                       </label>
                       <span style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: '700', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>
-                        Optimized Logistics Run
+                        {autoMatchedRoute ? 'Auto-Matched to Address' : 'Optimized Logistics Run'}
                       </span>
                     </div>
                     
                     <select 
                       value={deliveryRoute} 
-                      onChange={(e) => setDeliveryRoute(e.target.value)}
+                      onChange={(e) => {
+                        setDeliveryRoute(e.target.value);
+                        setHasManuallyChosenRoute(true);
+                      }}
                       style={{ width: '100%', padding: '9px 10px', fontWeight: '600' }}
                     >
-                      {PREDEFINED_DELIVERY_ROUTES.map(r => (
+                      {getAllDeliveryRoutes().map(r => (
                         <option key={r.id} value={r.name}>
                           {r.name} — {r.corridor} ({r.transitTime || `~${r.estimatedTransitMins} mins`})
                         </option>
@@ -532,7 +564,7 @@ export const CheckoutModal = ({ isOpen, onClose, onOrderPlaced }) => {
                       />
                     ) : (
                       (() => {
-                        const matched = PREDEFINED_DELIVERY_ROUTES.find(r => r.name === deliveryRoute);
+                        const matched = getAllDeliveryRoutes().find(r => r.name === deliveryRoute);
                         return matched ? (
                           <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                             <strong>Corridor / Zones:</strong> {matched.corridor || (Array.isArray(matched.zones) ? matched.zones.join(', ') : '')} • <em>Vehicle: {matched.defaultVehicle}</em>

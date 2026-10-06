@@ -255,10 +255,14 @@ public class OrderService {
             estimatedTime = LocalDateTime.now().plusHours(2);
         }
 
+        String finalRouteName = (request.getDeliveryRoute() != null && !request.getDeliveryRoute().isBlank())
+                ? request.getDeliveryRoute().trim()
+                : resolveRouteFromAddress(order.getDeliveryAddress());
+
         Delivery delivery = Delivery.builder()
                 .order(order)
                 .status(DeliveryStatus.PENDING)
-                .routeName(request.getDeliveryRoute() != null && !request.getDeliveryRoute().isBlank() ? request.getDeliveryRoute().trim() : null)
+                .routeName(finalRouteName)
                 .estimatedTime(estimatedTime)
                 .notes(vehicleDispatchNote)
                 .build();
@@ -389,6 +393,51 @@ public class OrderService {
 
         // Delete the order itself
         orderRepository.delete(order);
+    }
+
+    private String resolveRouteFromAddress(String address) {
+        if (address == null || address.isBlank()) {
+            return "Route 1 - Colombo Central Express";
+        }
+        String lower = address.toLowerCase();
+
+        if (lower.contains("bambalapitiya") || lower.contains("wellawatte") || lower.contains("dehiwala")
+                || lower.contains("mount lavinia") || lower.contains("ratmalana") || lower.contains("moratuwa")
+                || lower.contains("colombo 4") || lower.contains("colombo 04") || lower.contains("colombo 5")
+                || lower.contains("colombo 05") || lower.contains("colombo 6") || lower.contains("colombo 06")
+                || lower.contains("col 4") || lower.contains("col 04") || lower.contains("col 5")
+                || lower.contains("col 05") || lower.contains("col 6") || lower.contains("col 06")) {
+            return "Route 2 - Colombo South Coastal Corridor";
+        }
+
+        if (lower.contains("cinnamon") || lower.contains("borella") || lower.contains("rajagiriya")
+                || lower.contains("battaramulla") || lower.contains("pelawatte") || lower.contains("kotte")
+                || lower.contains("nawala") || lower.contains("colombo 7") || lower.contains("colombo 07")
+                || lower.contains("colombo 8") || lower.contains("colombo 08") || lower.contains("col 7")
+                || lower.contains("col 07") || lower.contains("col 8") || lower.contains("col 08")) {
+            return "Route 3 - Colombo East Metro Hub";
+        }
+
+        if (lower.contains("maradana") || lower.contains("grandpass") || lower.contains("peliyagoda")
+                || lower.contains("kelaniya") || lower.contains("wattala") || lower.contains("ja-ela")
+                || lower.contains("ja ela") || lower.contains("kandana") || lower.contains("kiribathgoda")
+                || lower.contains("colombo 10") || lower.contains("colombo 11") || lower.contains("colombo 12")
+                || lower.contains("colombo 13") || lower.contains("colombo 14") || lower.contains("colombo 15")) {
+            return "Route 4 - Colombo North Industrial Metro";
+        }
+
+        if (lower.contains("nugegoda") || lower.contains("kohuwala") || lower.contains("maharagama")
+                || lower.contains("kottawa") || lower.contains("pannipitiya") || lower.contains("homagama")
+                || lower.contains("piliyandala") || lower.contains("boralesgamuwa") || lower.contains("thalawathugoda")) {
+            return "Route 5 - Greater Colombo Outer Ring";
+        }
+
+        if (lower.contains("malabe") || lower.contains("koswatte") || lower.contains("thalahena")
+                || lower.contains("kaduwela") || lower.contains("athurugiriya") || lower.contains("hokandara")) {
+            return "Route 6 - Tech & Suburban Hub";
+        }
+
+        return "Route 1 - Colombo Central Express";
     }
 }
 

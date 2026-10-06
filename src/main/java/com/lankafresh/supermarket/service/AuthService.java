@@ -26,8 +26,24 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (request.getEmail() == null || !request.getEmail().trim().matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            throw new RuntimeException("Invalid email format. Please provide a valid email address.");
+        }
+
+        if (userRepository.existsByEmail(request.getEmail().trim().toLowerCase())) {
             throw new RuntimeException("Email is already registered!");
+        }
+
+        if (request.getPassword() == null || request.getPassword().length() <= 8) {
+            throw new RuntimeException("Password must be more than 8 characters long (at least 9 characters).");
+        }
+
+        if (!request.getPassword().matches(".*[a-zA-Z].*")) {
+            throw new RuntimeException("Password must contain at least one letter.");
+        }
+
+        if (!request.getPassword().matches(".*[0-9].*")) {
+            throw new RuntimeException("Password must contain at least one number.");
         }
 
         String validatedPhone = validateAndNormalizePhone(request.getPhone());

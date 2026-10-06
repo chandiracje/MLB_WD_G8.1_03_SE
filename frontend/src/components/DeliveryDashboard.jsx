@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { IconTruck, IconCheck, IconX, IconTrash, IconPackage, IconNavigation, IconMapPin, IconCalendar, IconClock, IconPhone, IconUser, IconAlert, IconSettings, IconPrinter, IconArrowUp, IconArrowDown, IconExternalLink } from './Icons';
-import { PREDEFINED_DELIVERY_ROUTES } from '../constants/deliveryRoutes';
+import { IconTruck, IconCheck, IconX, IconTrash, IconPackage, IconNavigation, IconMapPin, IconCalendar, IconClock, IconPhone, IconUser, IconAlert, IconSettings, IconPrinter, IconArrowUp, IconArrowDown, IconExternalLink, IconFlag, IconPlus } from './Icons';
+import { PREDEFINED_DELIVERY_ROUTES, getAllDeliveryRoutes, saveCustomDeliveryRoute, findOptimalRouteForAddress } from '../constants/deliveryRoutes';
 
 export const DeliveryDashboard = () => {
   const { user } = useAuth();
@@ -11,9 +11,20 @@ export const DeliveryDashboard = () => {
   const [activeDelivery, setActiveDelivery] = useState(null);
   const [failureNote, setFailureNote] = useState('');
   const [isFailModalOpen, setIsFailModalOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ASSIGNED');
+  const [hasInitializedFilter, setHasInitializedFilter] = useState(false);
+  const [selectedDetailDelivery, setSelectedDetailDelivery] = useState(null);
   const [routeFilter, setRouteFilter] = useState('ALL');
   const [notificationMessage, setNotificationMessage] = useState('');
+
+  // Delivery Routes State & Creation Modal State
+  const [availableRoutes, setAvailableRoutes] = useState(() => getAllDeliveryRoutes());
+  const [isCreateRouteModalOpen, setIsCreateRouteModalOpen] = useState(false);
+  const [newRouteName, setNewRouteName] = useState('');
+  const [newRouteCorridor, setNewRouteCorridor] = useState('');
+  const [newRouteVehicle, setNewRouteVehicle] = useState('WP BCD-4589 (Express Motorbike)');
+  const [newRouteTransitMins, setNewRouteTransitMins] = useState('45');
+  const [newRouteColor, setNewRouteColor] = useState('#10b981');
 
   // Individual Delivery Scheduling & Route Modal State
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -36,10 +47,10 @@ export const DeliveryDashboard = () => {
   };
 
   // Route Assignment Configuration State (Tab 2)
-  const [selectedRoutePresetId, setSelectedRoutePresetId] = useState(PREDEFINED_DELIVERY_ROUTES[0].id);
-  const [routeName, setRouteName] = useState(PREDEFINED_DELIVERY_ROUTES[0].name);
-  const [vehicleNumber, setVehicleNumber] = useState(PREDEFINED_DELIVERY_ROUTES[0].defaultVehicle);
-  const [routeNotes, setRouteNotes] = useState(`Corridor: ${PREDEFINED_DELIVERY_ROUTES[0].corridor}. Handle chilled items with priority.`);
+  const [selectedRoutePresetId, setSelectedRoutePresetId] = useState(availableRoutes[0]?.id || PREDEFINED_DELIVERY_ROUTES[0].id);
+  const [routeName, setRouteName] = useState(availableRoutes[0]?.name || PREDEFINED_DELIVERY_ROUTES[0].name);
+  const [vehicleNumber, setVehicleNumber] = useState(availableRoutes[0]?.defaultVehicle || PREDEFINED_DELIVERY_ROUTES[0].defaultVehicle);
+  const [routeNotes, setRouteNotes] = useState(`Corridor: ${availableRoutes[0]?.corridor || PREDEFINED_DELIVERY_ROUTES[0].corridor}. Handle chilled items with priority.`);
   const [departureSchedule, setDepartureSchedule] = useState(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + 30);
@@ -57,6 +68,28 @@ export const DeliveryDashboard = () => {
       const res = await api.getAllDeliveries();
       const list = res || [];
       setDeliveries(list);
+
+      // Keep selectedDetailDelivery updated if currently open
+      setSelectedDetailDelivery(prev => {
+        if (!prev) return null;
+        return list.find(d => d.id === prev.id) || null;
+      });
+
+      // Default filter logic: show assigned deliveries; if none assigned currently, show pending ones
+      if (!hasInitializedFilter) {
+        const hasAssigned = list.some(d => d.status === 'ASSIGNED');
+        if (hasAssigned) {
+          setStatusFilter('ASSIGNED');
+        } else {
+          const hasPending = list.some(d => d.status === 'PENDING');
+          if (hasPending) {
+            setStatusFilter('PENDING');
+          } else {
+            setStatusFilter('ALL');
+          }
+        }
+        setHasInitializedFilter(true);
+      }
 
       // Sync transit deliveries for route assignment (filter only orders accepted in transit)
       const transitOrders = list
@@ -114,6 +147,9 @@ export const DeliveryDashboard = () => {
 
     try {
       await api.deleteDelivery(delivId);
+      if (selectedDetailDelivery?.id === delivId) {
+        setSelectedDetailDelivery(null);
+      }
       await loadDeliveries();
       showNotification(`Delivery request for Order #${orderId} has been successfully deleted.`);
     } catch (e) {
@@ -134,11 +170,35 @@ export const DeliveryDashboard = () => {
     }
   };
 
+  // Create custom delivery route corridor
+  const handleCreateRoute = (e) => {
+    if (e) e.preventDefault();
+    if (!newRouteName.trim() || !newRouteCorridor.trim()) {
+      alert("Please enter both Route Name and Corridor/Serviced Areas.");
+      return;
+    }
+    const created = saveCustomDeliveryRoute({
+      name: newRouteName.trim(),
+      corridor: newRouteCorridor.trim(),
+      defaultVehicle: newRouteVehicle.trim() || 'WP BCD-4589 (Express Motorbike)',
+      transitTime: `${newRouteTransitMins || 45} mins`,
+      color: newRouteColor || '#10b981'
+    });
+    const updated = getAllDeliveryRoutes();
+    setAvailableRoutes(updated);
+    setIsCreateRouteModalOpen(false);
+    setNewRouteName('');
+    setNewRouteCorridor('');
+    setNewRouteVehicle('WP BCD-4589 (Express Motorbike)');
+    setNewRouteTransitMins('45');
+    showNotification(`New delivery route "${created.name}" created and added to corridors!`);
+  };
+
   // Open Schedule & Choose Route modal for a single delivery
   const handleOpenScheduleModal = (delivery) => {
     setSchedulingDelivery(delivery);
     const existingRoute = delivery.routeName || '';
-    const matchingPreset = PREDEFINED_DELIVERY_ROUTES.find(r => r.name === existingRoute || r.shortName === existingRoute);
+    const matchingPreset = availableRoutes.find(r => r.name === existingRoute || r.shortName === existingRoute);
     if (matchingPreset) {
       setSchedRoute(matchingPreset.name);
       setSchedCustomRoute('');
@@ -148,9 +208,12 @@ export const DeliveryDashboard = () => {
       setSchedCustomRoute(existingRoute);
       setSchedVehicle(delivery.vehicleNumber || 'WP BCD-4589');
     } else {
-      setSchedRoute(PREDEFINED_DELIVERY_ROUTES[0].name);
+      // Auto-match route from address if unassigned!
+      const autoMatchedName = findOptimalRouteForAddress(delivery.order?.deliveryAddress);
+      const matched = availableRoutes.find(r => r.name === autoMatchedName) || availableRoutes[0];
+      setSchedRoute(matched ? matched.name : availableRoutes[0]?.name || 'Route 1 - Colombo Central');
       setSchedCustomRoute('');
-      setSchedVehicle(delivery.vehicleNumber || PREDEFINED_DELIVERY_ROUTES[0].defaultVehicle);
+      setSchedVehicle(delivery.vehicleNumber || matched?.defaultVehicle || 'WP BCD-4589');
     }
 
     if (delivery.estimatedTime) {
@@ -224,7 +287,7 @@ export const DeliveryDashboard = () => {
       setRouteName('');
       return;
     }
-    const found = PREDEFINED_DELIVERY_ROUTES.find(r => r.id === routeId);
+    const found = availableRoutes.find(r => r.id === routeId);
     if (found) {
       setRouteName(found.name);
       setVehicleNumber(found.defaultVehicle);
@@ -432,31 +495,44 @@ export const DeliveryDashboard = () => {
       {activeTab === 'queue' && (
         <div>
           {/* Filter Bar with Status AND Route filters */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap', gap: '14px' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-muted)' }}>Status:</span>
-              {['ALL', 'PENDING', 'ASSIGNED', 'TRANSIT', 'DELIVERED', 'FAILED'].map(st => (
-                <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '20px',
-                    fontSize: '0.78rem',
-                    fontWeight: '600',
-                    border: '1px solid',
-                    cursor: 'pointer',
-                    background: statusFilter === st ? 'var(--primary)' : 'var(--bg-card)',
-                    color: statusFilter === st ? 'white' : 'var(--text-muted)',
-                    borderColor: statusFilter === st ? 'var(--primary)' : 'var(--border)'
-                  }}
-                >
-                  {st === 'ALL' ? `All (${totalCount})` : `${st} (${deliveries.filter(d => d.status === st).length})`}
-                </button>
-              ))}
+              <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)' }}>Status Filter:</span>
+              {[
+                { key: 'ASSIGNED', label: 'Assigned' },
+                { key: 'PENDING', label: 'Pending' },
+                { key: 'TRANSIT', label: 'In Transit' },
+                { key: 'DELIVERED', label: 'Delivered' },
+                { key: 'FAILED', label: 'Failed' },
+                { key: 'ALL', label: 'All Requests' }
+              ].map(({ key, label }) => {
+                const count = key === 'ALL' ? totalCount : deliveries.filter(d => d.status === key).length;
+                const isActive = statusFilter === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setStatusFilter(key)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      fontSize: '0.8rem',
+                      fontWeight: '700',
+                      border: '1px solid',
+                      cursor: 'pointer',
+                      background: isActive ? 'var(--primary)' : 'var(--bg-card)',
+                      color: isActive ? 'white' : 'var(--text-muted)',
+                      borderColor: isActive ? 'var(--primary)' : 'var(--border)',
+                      boxShadow: isActive ? '0 2px 6px rgba(16, 185, 129, 0.25)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {label} ({count})
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Route Filter Dropdown */}
+            {/* Route Filter Dropdown & New Route Button */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <IconNavigation size={15} /> Choose Route:
@@ -477,15 +553,32 @@ export const DeliveryDashboard = () => {
               >
                 <option value="ALL">All Delivery Routes ({deliveries.length})</option>
                 <option value="UNASSIGNED">Unassigned Routes ({deliveries.filter(d => !d.routeName).length})</option>
-                {PREDEFINED_DELIVERY_ROUTES.map(r => {
+                {availableRoutes.map(r => {
                   const count = deliveries.filter(d => d.routeName === r.name).length;
                   return (
                     <option key={r.id} value={r.name}>
-                      {r.shortName} ({count})
+                      {r.shortName || r.name} ({count})
                     </option>
                   );
                 })}
               </select>
+
+              <button
+                type="button"
+                onClick={() => setIsCreateRouteModalOpen(true)}
+                className="btn-primary"
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  borderRadius: 'var(--radius-sm)'
+                }}
+                title="Create a new custom delivery corridor/route"
+              >
+                <IconPlus size={14} /> New Route
+              </button>
             </div>
           </div>
 
@@ -493,184 +586,259 @@ export const DeliveryDashboard = () => {
           {filteredDeliveries.length === 0 ? (
             <div className="glass-card" style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <IconTruck size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 14px auto', display: 'block' }} />
-              <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '6px' }}>No Deliveries Found</h3>
-              <p style={{ fontSize: '0.85rem' }}>No delivery dispatch requests match the selected filters (Status: {statusFilter} | Route: {routeFilter}).</p>
+              <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '6px' }}>
+                No {statusFilter === 'ALL' ? '' : `${statusFilter} `}Deliveries Found
+              </h3>
+              <p style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+                {statusFilter === 'ASSIGNED' 
+                  ? 'There are currently no deliveries assigned to riders. You can view pending deliveries or all requests.'
+                  : `No delivery dispatch requests match the selected filters (Status: ${statusFilter} | Route: ${routeFilter}).`}
+              </p>
+              {statusFilter !== 'ALL' && (
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  {statusFilter === 'ASSIGNED' && (
+                    <button
+                      onClick={() => setStatusFilter('PENDING')}
+                      className="btn-primary"
+                      style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+                    >
+                      View Pending Deliveries ({deliveries.filter(d => d.status === 'PENDING').length}) →
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setStatusFilter('ALL')}
+                    className="btn-secondary"
+                    style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+                  >
+                    View All ({deliveries.length})
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '18px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
               {filteredDeliveries.map(d => {
-                const isResolvedOrFailed = d.status === 'DELIVERED' || d.status === 'FAILED';
+                const getStatusBadge = (st) => {
+                  switch (st) {
+                    case 'ASSIGNED':
+                      return { bg: '#ede9fe', color: '#6d28d9', border: '#ddd6fe', label: 'ASSIGNED' };
+                    case 'PENDING':
+                      return { bg: '#fef3c7', color: '#b45309', border: '#fde68a', label: 'PENDING' };
+                    case 'TRANSIT':
+                      return { bg: '#e0f2fe', color: '#0369a1', border: '#bae6fd', label: 'IN TRANSIT' };
+                    case 'DELIVERED':
+                      return { bg: '#dcfce7', color: '#15803d', border: '#bbf7d0', label: 'DELIVERED' };
+                    case 'FAILED':
+                      return { bg: '#fee2e2', color: '#dc2626', border: '#fecaca', label: 'FAILED' };
+                    default:
+                      return { bg: 'var(--bg-main)', color: 'var(--text-main)', border: 'var(--border)', label: st };
+                  }
+                };
+
+                const statusStyle = getStatusBadge(d.status);
+                const isAccepted = !!d.deliveryStaff || d.status === 'ASSIGNED' || d.status === 'TRANSIT' || d.status === 'DELIVERED';
+                const canAccept = !d.deliveryStaff && d.status !== 'DELIVERED';
+                const canStartTransit = d.status !== 'TRANSIT' && d.status !== 'DELIVERED' && d.status !== 'FAILED';
 
                 return (
-                  <div key={d.id} className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: isResolvedOrFailed ? '1px solid var(--border)' : '1px solid rgba(16, 185, 129, 0.25)' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span className="badge badge-success">
-                          Order #{d.order?.id} ({d.order?.trackingNumber})
+                  <div
+                    key={d.id}
+                    className="glass-card"
+                    onClick={() => setSelectedDetailDelivery(d)}
+                    style={{
+                      padding: '18px 20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border)',
+                      cursor: 'pointer',
+                      background: 'var(--bg-card)',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: 'var(--shadow-sm)',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                      e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                    }}
+                  >
+                    {/* Top Row: Order ID & Status Badge */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)' }}>
+                          Order #{d.order?.id}
                         </span>
-                        <span className={`badge ${d.status === 'DELIVERED' ? 'badge-success' : d.status === 'FAILED' ? 'badge-danger' : d.status === 'TRANSIT' ? 'badge-primary' : 'badge-warning'}`}>
-                          {d.status}
+                        {d.order?.trackingNumber && (
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                            {d.order.trackingNumber}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '800',
+                        padding: '3px 9px',
+                        borderRadius: '12px',
+                        background: statusStyle.bg,
+                        color: statusStyle.color,
+                        border: `1px solid ${statusStyle.border}`,
+                        letterSpacing: '0.04em'
+                      }}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
+
+                    {/* Body: Route name, Address, Phone number */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                      {/* Route Name */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem' }}>
+                        <IconNavigation size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Route:</span>
+                        <span style={{
+                          fontWeight: '700',
+                          color: d.routeName ? 'var(--text-main)' : '#b45309',
+                          background: d.routeName ? 'var(--bg-main)' : '#fef3c7',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.8rem',
+                          border: d.routeName ? '1px solid var(--border)' : '1px solid #fde68a'
+                        }}>
+                          {d.routeName || 'Unassigned Route'}
                         </span>
                       </div>
 
-                      <h3 style={{ fontSize: '1.15rem', marginBottom: '4px', color: 'var(--text-main)' }}>
-                        {d.order?.user?.name || 'Customer'}
-                      </h3>
-                      <div style={{ fontSize: '0.88rem', color: 'var(--primary)', fontWeight: '700', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <IconPhone size={14} /> Phone: <a href={`tel:${d.order?.user?.phone || '0771234567'}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>{d.order?.user?.phone || '0771234567'}</a>
-                      </div>
-
-                      <div style={{ background: 'var(--bg-main)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '14px', border: '1px solid var(--border)' }}>
-                        <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                          <IconMapPin size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-                          <div><strong>Delivery Address:</strong> <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{d.order?.deliveryAddress}</span></div>
-                        </div>
-
-                        {/* Delivery Route Tag */}
-                        <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: '700', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <IconNavigation size={13} /> Route:
-                          </span>
-                          {d.routeName ? (
-                            <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '4px', fontWeight: '700', fontSize: '0.78rem', border: '1px solid #bae6fd' }}>
-                              {d.routeName} {d.routeStopOrder ? `(Stop #${d.routeStopOrder})` : ''} {d.vehicleNumber ? `• ${d.vehicleNumber}` : ''}
-                            </span>
-                          ) : (
-                            <span style={{ background: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: '4px', fontWeight: '600', fontSize: '0.78rem', border: '1px solid #fde68a' }}>
-                              No Route Assigned
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Scheduled Delivery Time Tag */}
-                        <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: '700', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <IconCalendar size={13} /> Scheduled:
-                          </span>
+                      {/* Address */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.86rem' }}>
+                        <IconMapPin size={15} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ flex: 1, minWidth: 0, color: 'var(--text-main)', lineHeight: '1.4' }}>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Address: </span>
                           <span style={{
-                            background: d.estimatedTime ? '#dcfce7' : 'var(--bg-card)',
-                            color: d.estimatedTime ? '#15803d' : 'var(--text-main)',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
                             fontWeight: '600',
-                            fontSize: '0.78rem',
-                            border: '1px solid var(--border)'
-                          }}>
-                            {formatScheduledTime(d.estimatedTime, d.order?.deliverySlot)}
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }} title={d.order?.deliveryAddress}>
+                            {d.order?.deliveryAddress || 'No address specified'}
                           </span>
                         </div>
+                      </div>
 
-                        {d.deliveryStaff && (
-                          <div style={{ color: 'var(--primary)', marginTop: '4px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <IconUser size={14} /> Assigned Rider: <strong>{d.deliveryStaff.name}</strong>
-                          </div>
-                        )}
-                        {d.notes && (
-                          <div style={{ color: '#dc2626', marginTop: '4px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <IconAlert size={14} /> Note: {d.notes}
-                          </div>
-                        )}
+                      {/* Phone Number */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem' }}>
+                        <IconPhone size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Phone:</span>
+                        <a
+                          href={`tel:${d.order?.user?.phone || '0771234567'}`}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            color: 'var(--primary)',
+                            fontWeight: '700',
+                            textDecoration: 'none'
+                          }}
+                          title="Call recipient"
+                        >
+                          {d.order?.user?.phone || '0771234567'}
+                        </a>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {/* Schedule & Route Action Button */}
-                      <button
-                        onClick={() => handleOpenScheduleModal(d)}
-                        style={{
-                          padding: '8px 12px',
-                          fontSize: '0.85rem',
-                          background: '#ede9fe',
-                          color: '#6d28d9',
-                          border: '1px solid #ddd6fe',
-                          borderRadius: 'var(--radius-sm)',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          flex: '1'
-                        }}
-                        title="Choose delivery route corridor and schedule delivery date & time"
-                      >
-                        <IconCalendar size={15} /> Route & Schedule
-                      </button>
-
-                      {!d.deliveryStaff && (
+                    {/* Bottom Action Controls: Accept Route and Start Transit */}
+                    <div>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        {/* Button 1: Accept Route */}
                         <button
-                          onClick={() => handleAssignToMe(d.id)}
-                          className="btn-secondary"
-                          style={{ flex: '1', justifyContent: 'center', padding: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        >
-                          <IconCheck size={15} /> Accept Route
-                        </button>
-                      )}
-
-                      {d.status !== 'TRANSIT' && d.status !== 'DELIVERED' && (
-                        <button
-                          onClick={() => handleUpdateStatus(d.id, 'TRANSIT', 'Driver on the way')}
-                          className="btn-secondary"
-                          style={{ flex: '1', justifyContent: 'center', padding: '8px', fontSize: '0.85rem', background: '#0284c7', color: 'white', border: 'none' }}
-                        >
-                          <IconTruck size={16} /> Start Transit
-                        </button>
-                      )}
-
-                      {d.status !== 'DELIVERED' && (
-                        <button
-                          onClick={() => handleUpdateStatus(d.id, 'DELIVERED', 'Delivered to customer')}
-                          className="btn-primary"
-                          style={{ flex: '1', justifyContent: 'center', padding: '8px', fontSize: '0.85rem' }}
-                        >
-                          <IconCheck size={16} /> Mark Delivered
-                        </button>
-                      )}
-
-                      {d.status !== 'DELIVERED' && d.status !== 'FAILED' && (
-                        <button
-                          onClick={() => {
-                            setActiveDelivery(d);
-                            setIsFailModalOpen(true);
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAssignToMe(d.id);
                           }}
-                          className="btn-danger"
-                          style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-                        >
-                          Flag Failed
-                        </button>
-                      )}
-
-                      {/* DELETE ACTION FOR RESOLVED OR FAILED DELIVERY REQUESTS */}
-                      {isResolvedOrFailed && (
-                        <button
-                          onClick={() => handleDeleteDelivery(d.id, d.order?.id)}
+                          disabled={!canAccept}
                           style={{
-                            flex: '1',
-                            padding: '8px 12px',
-                            fontSize: '0.85rem',
-                            background: '#fee2e2',
-                            color: '#b91c1c',
-                            border: '1px solid #fecaca',
+                            flex: 1,
+                            padding: '8px 10px',
+                            fontSize: '0.82rem',
+                            fontWeight: '700',
                             borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer',
+                            border: '1px solid',
+                            cursor: canAccept ? 'pointer' : 'default',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '6px',
-                            fontWeight: '600'
+                            gap: '5px',
+                            background: isAccepted ? '#f0fdf4' : 'var(--bg-card)',
+                            borderColor: isAccepted ? '#86efac' : 'var(--border)',
+                            color: isAccepted ? '#166534' : 'var(--text-main)',
+                            opacity: canAccept ? 1 : 0.85,
+                            transition: 'all 0.15s ease'
                           }}
-                          title="Delete resolved or failed delivery request from queue"
+                          title={isAccepted ? "Route already accepted" : "Accept delivery route"}
                         >
-                          <IconTrash size={16} /> Delete Request
+                          <IconCheck size={14} />
+                          {isAccepted ? 'Accepted' : 'Accept Route'}
                         </button>
-                      )}
+
+                        {/* Button 2: Start Transit */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateStatus(d.id, 'TRANSIT', 'Driver dispatched on transit route');
+                          }}
+                          disabled={!canStartTransit}
+                          style={{
+                            flex: 1,
+                            padding: '8px 10px',
+                            fontSize: '0.82rem',
+                            fontWeight: '700',
+                            borderRadius: 'var(--radius-sm)',
+                            border: 'none',
+                            cursor: canStartTransit ? 'pointer' : 'default',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            background: d.status === 'TRANSIT' ? '#0284c7' : (d.status === 'DELIVERED' ? '#166534' : 'var(--primary)'),
+                            color: 'white',
+                            opacity: canStartTransit ? 1 : (d.status === 'TRANSIT' ? 1 : 0.65),
+                            transition: 'all 0.15s ease',
+                            boxShadow: canStartTransit ? '0 2px 6px rgba(16, 185, 129, 0.25)' : 'none'
+                          }}
+                          title={canStartTransit ? "Start delivery transit" : `Status: ${d.status}`}
+                        >
+                          <IconTruck size={14} />
+                          {d.status === 'TRANSIT' ? 'In Transit' : (d.status === 'DELIVERED' ? 'Delivered' : 'Start Transit')}
+                        </button>
+                      </div>
+
+                      {/* Click affordance indicator */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        fontSize: '0.72rem',
+                        color: 'var(--text-muted)',
+                        paddingTop: '6px',
+                        borderTop: '1px dashed var(--border)'
+                      }}>
+                        <span>Click card for details, delete or flag</span>
+                        <IconExternalLink size={12} />
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
+
         </div>
       )}
 
@@ -720,9 +888,26 @@ export const DeliveryDashboard = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '18px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                      SELECT DELIVERY ROUTE CORRIDOR
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-muted)' }}>
+                        SELECT DELIVERY ROUTE CORRIDOR
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateRouteModalOpen(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                          fontSize: '0.78rem',
+                          fontWeight: '700',
+                          padding: 0
+                        }}
+                      >
+                        + Create Corridor
+                      </button>
+                    </div>
                     <select
                       value={selectedRoutePresetId}
                       onChange={(e) => handleSelectPresetRoute(e.target.value)}
@@ -737,7 +922,7 @@ export const DeliveryDashboard = () => {
                         cursor: 'pointer'
                       }}
                     >
-                      {PREDEFINED_DELIVERY_ROUTES.map(r => (
+                      {availableRoutes.map(r => (
                         <option key={r.id} value={r.id}>
                           {r.name} ({r.corridor})
                         </option>
@@ -1020,6 +1205,230 @@ export const DeliveryDashboard = () => {
         </div>
       )}
 
+      {/* Detailed Delivery Card Modal */}
+      {selectedDetailDelivery && (
+        <div className="modal-overlay" onClick={() => setSelectedDetailDelivery(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '620px', width: '95%', padding: '24px', borderRadius: 'var(--radius-lg)' }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', borderBottom: '1px solid var(--border)', paddingBottom: '14px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                  <h2 style={{ fontSize: '1.35rem', color: 'var(--text-main)', margin: 0 }}>
+                    Order #{selectedDetailDelivery.order?.id}
+                  </h2>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: '800',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    ...(() => {
+                      const st = selectedDetailDelivery.status;
+                      if (st === 'ASSIGNED') return { background: '#ede9fe', color: '#6d28d9', border: '1px solid #ddd6fe' };
+                      if (st === 'PENDING') return { background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' };
+                      if (st === 'TRANSIT') return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
+                      if (st === 'DELIVERED') return { background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' };
+                      if (st === 'FAILED') return { background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' };
+                      return { background: 'var(--bg-main)', color: 'var(--text-main)', border: '1px solid var(--border)' };
+                    })()
+                  }}>
+                    {selectedDetailDelivery.status}
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Tracking Number: <strong style={{ color: 'var(--text-main)' }}>{selectedDetailDelivery.order?.trackingNumber || 'N/A'}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedDetailDelivery(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
+                title="Close Modal"
+              >
+                <IconX size={22} />
+              </button>
+            </div>
+
+            {/* Customer & Destination Details Card */}
+            <div style={{ background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid var(--border)', marginBottom: '16px' }}>
+              <h4 style={{ fontSize: '0.82rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '12px', letterSpacing: '0.05em' }}>
+                Customer & Contact Details
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Customer Name</span>
+                  <span style={{ fontSize: '0.92rem', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <IconUser size={15} style={{ color: 'var(--primary)' }} /> {selectedDetailDelivery.order?.user?.name || 'Customer'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Contact Phone</span>
+                  <a
+                    href={`tel:${selectedDetailDelivery.order?.user?.phone || '0771234567'}`}
+                    style={{ fontSize: '0.92rem', fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+                  >
+                    <IconPhone size={15} /> {selectedDetailDelivery.order?.user?.phone || '0771234567'}
+                  </a>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Delivery Address</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-main)', display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
+                    <IconMapPin size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
+                    <span>{selectedDetailDelivery.order?.deliveryAddress || 'No address provided'}</span>
+                  </div>
+                  <a
+                    href={getGoogleMapsLink(selectedDetailDelivery.order?.deliveryAddress)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '0.78rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <IconNavigation size={13} /> Open in Maps
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Route & Logistics Information */}
+            <div style={{ background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid var(--border)', marginBottom: '16px' }}>
+              <h4 style={{ fontSize: '0.82rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '12px', letterSpacing: '0.05em' }}>
+                Logistics & Schedule
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Assigned Corridor</span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: '700', color: selectedDetailDelivery.routeName ? 'var(--text-main)' : '#b45309' }}>
+                    {selectedDetailDelivery.routeName || 'Not Assigned Yet'}
+                    {selectedDetailDelivery.routeStopOrder ? ` (Stop #${selectedDetailDelivery.routeStopOrder})` : ''}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Assigned Vehicle</span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                    {selectedDetailDelivery.vehicleNumber || 'WP BCD-4589'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Delivery Schedule</span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--primary)' }}>
+                    {formatScheduledTime(selectedDetailDelivery.estimatedTime, selectedDetailDelivery.order?.deliverySlot)}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>Order Total</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)' }}>
+                    Rs. {Number(selectedDetailDelivery.order?.totalAmount || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {selectedDetailDelivery.deliveryStaff && (
+                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                  <strong>Assigned Rider:</strong> {selectedDetailDelivery.deliveryStaff.name} ({selectedDetailDelivery.deliveryStaff.email || 'Delivery Staff'})
+                </div>
+              )}
+
+              {selectedDetailDelivery.notes && (
+                <div style={{ marginTop: '10px', padding: '10px 12px', background: '#fee2e2', borderRadius: 'var(--radius-sm)', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <IconAlert size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong>Dispatch Note / Issue:</strong> {selectedDetailDelivery.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions: Flag, Delete, Schedule, Deliver */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Flag Issue button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDelivery(selectedDetailDelivery);
+                    setIsFailModalOpen(true);
+                  }}
+                  className="btn-danger"
+                  style={{ flex: 1, minWidth: '130px', justifyContent: 'center', padding: '10px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  title="Flag failure or issue with delivery"
+                >
+                  <IconFlag size={16} /> Flag Issue
+                </button>
+
+                {/* Delete Request button */}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteDelivery(selectedDetailDelivery.id, selectedDetailDelivery.order?.id)}
+                  style={{
+                    flex: 1,
+                    minWidth: '130px',
+                    padding: '10px 14px',
+                    fontSize: '0.85rem',
+                    background: '#fee2e2',
+                    color: '#b91c1c',
+                    border: '1px solid #fecaca',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontWeight: '700'
+                  }}
+                  title="Delete this delivery request"
+                >
+                  <IconTrash size={16} /> Delete Request
+                </button>
+
+                {/* Route & Schedule button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenScheduleModal(selectedDetailDelivery);
+                  }}
+                  style={{
+                    flex: 1,
+                    minWidth: '130px',
+                    padding: '10px 14px',
+                    fontSize: '0.85rem',
+                    background: '#ede9fe',
+                    color: '#6d28d9',
+                    border: '1px solid #ddd6fe',
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                  title="Adjust route corridor and scheduled date/time"
+                >
+                  <IconCalendar size={16} /> Schedule
+                </button>
+              </div>
+
+              {/* Complete & Mark Delivered (if in transit) */}
+              {selectedDetailDelivery.status === 'TRANSIT' && (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateStatus(selectedDetailDelivery.id, 'DELIVERED', 'Delivered to customer')}
+                  className="btn-primary"
+                  style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '0.95rem', fontWeight: '700' }}
+                >
+                  <IconCheck size={18} /> Complete & Mark Delivered
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Failed Delivery Modal */}
       {isFailModalOpen && activeDelivery && (
         <div className="modal-overlay" onClick={() => setIsFailModalOpen(false)}>
@@ -1091,15 +1500,32 @@ export const DeliveryDashboard = () => {
             <form onSubmit={handleSaveDeliverySchedule}>
               {/* Route Selection */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
-                  CHOOSE DELIVERY ROUTE / CORRIDOR
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                    CHOOSE DELIVERY ROUTE / CORRIDOR
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateRouteModalOpen(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary)',
+                      cursor: 'pointer',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      padding: 0
+                    }}
+                  >
+                    + Create Corridor
+                  </button>
+                </div>
                 <select
                   value={schedRoute}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSchedRoute(val);
-                    const matched = PREDEFINED_DELIVERY_ROUTES.find(r => r.name === val);
+                    const matched = availableRoutes.find(r => r.name === val);
                     if (matched) {
                       setSchedVehicle(matched.defaultVehicle);
                     }
@@ -1115,7 +1541,7 @@ export const DeliveryDashboard = () => {
                     fontWeight: '600'
                   }}
                 >
-                  {PREDEFINED_DELIVERY_ROUTES.map(r => (
+                  {availableRoutes.map(r => (
                     <option key={r.id} value={r.name}>
                       {r.name} — {r.corridor} ({r.transitTime})
                     </option>
@@ -1282,6 +1708,145 @@ export const DeliveryDashboard = () => {
                   style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   {isSavingSchedule ? 'Saving...' : 'Confirm Route & Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Delivery Route Modal */}
+      {isCreateRouteModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsCreateRouteModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <IconPlus size={18} style={{ color: 'var(--primary)' }} /> Create Delivery Route Corridor
+                </h3>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Add a new delivery corridor and service area
+                </span>
+              </div>
+              <button 
+                onClick={() => setIsCreateRouteModalOpen(false)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                <IconX size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Newly created routes will be saved to your system and automatically suggested for customer addresses matching this corridor during checkout and dispatch.
+            </p>
+
+            <form onSubmit={handleCreateRoute}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
+                  ROUTE NAME *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Route North #3 - Negombo Corridor"
+                  value={newRouteName}
+                  onChange={(e) => setNewRouteName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-main)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.9rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
+                  CORRIDOR / SERVICED AREAS *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Wattala, Hendala, Kandana, Ragama, Ja-Ela"
+                  value={newRouteCorridor}
+                  onChange={(e) => setNewRouteCorridor(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-main)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.9rem'
+                  }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  Customer addresses containing these area names will automatically auto-match to this route.
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
+                    DEFAULT VEHICLE
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WP BCD-4589"
+                    value={newRouteVehicle}
+                    onChange={(e) => setNewRouteVehicle(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-main)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
+                    EST. TRANSIT (MINS)
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="240"
+                    value={newRouteTransitMins}
+                    onChange={(e) => setNewRouteTransitMins(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-main)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateRouteModalOpen(false)}
+                  className="btn-secondary"
+                  style={{ padding: '10px 18px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <IconCheck size={16} /> Save & Activate Route
                 </button>
               </div>
             </form>

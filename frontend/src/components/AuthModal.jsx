@@ -59,8 +59,16 @@ export const AuthModal = ({ isOpen, onClose, onStaffLoginSuccess, onOpenTracker,
       setError('Please enter a valid email address (e.g. yourname@example.com).');
       return;
     }
-    if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!password || password.length <= 8) {
+      setError('Password must be more than 8 characters long (at least 9 characters).');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password)) {
+      setError('Password must contain at least one letter.');
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Password must contain at least one number.');
       return;
     }
     if (!phone || !phone.trim()) {
@@ -471,32 +479,67 @@ export const AuthModal = ({ isOpen, onClose, onStaffLoginSuccess, onOpenTracker,
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
-                      Email Address *
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                        Email Address *
+                      </label>
+                      {email.trim() && (
+                        <span style={{ 
+                          fontSize: '0.74rem', 
+                          fontWeight: '600',
+                          color: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim()) ? '#10b981' : '#ef4444' 
+                        }}>
+                          {/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim()) ? '✓ Valid Email' : '✗ Invalid Email Format'}
+                        </span>
+                      )}
+                    </div>
                     <input 
                       type="email" 
                       required 
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
                       placeholder="e.g. kasun@gmail.com"
-                      style={{ width: '100%' }} 
+                      style={{ 
+                        width: '100%',
+                        borderColor: email.trim() && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim()) ? '#ef4444' : undefined
+                      }} 
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
-                      Password *
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                        Password *
+                      </label>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Must be &gt; 8 chars with 1 letter &amp; 1 number
+                      </span>
+                    </div>
                     <input 
                       type="password" 
                       required 
-                      minLength={6}
+                      minLength={9}
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
-                      placeholder="Choose a secure password (min 6 chars)"
-                      style={{ width: '100%' }} 
+                      placeholder="Enter password (> 8 chars, 1 letter, 1 number)"
+                      style={{ 
+                        width: '100%',
+                        borderColor: password && (password.length <= 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) ? '#ef4444' : undefined
+                      }} 
                     />
+                    {password && (
+                      <div style={{ marginTop: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '0.74rem' }}>
+                        <span style={{ color: password.length > 8 ? '#15803d' : '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
+                          {password.length > 8 ? '✓' : '✗'} &gt; 8 characters ({password.length})
+                        </span>
+                        <span style={{ color: /[a-zA-Z]/.test(password) ? '#15803d' : '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
+                          {/[a-zA-Z]/.test(password) ? '✓' : '✗'} At least 1 letter
+                        </span>
+                        <span style={{ color: /[0-9]/.test(password) ? '#15803d' : '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
+                          {/[0-9]/.test(password) ? '✓' : '✗'} At least 1 number
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
