@@ -18,6 +18,7 @@ import {
   IconStore, 
   IconBuilding, 
   IconPhone 
+} from './Icons';
 import { PREDEFINED_DELIVERY_ROUTES, getAllDeliveryRoutes, findOptimalRouteForAddress } from '../constants/deliveryRoutes';
 import { LocationPickerModal } from './LocationPickerModal';
 
